@@ -4,6 +4,10 @@ import { Rider } from "../model/Rider.js";
 
 export const startOrderReadyConsumer = async () => {
   const channel = getChannel();
+  if (!channel) {
+    console.warn("⚠️ RabbitMQ channel not available. Skipping orderReady consumer startup.");
+    return;
+  }
 
   console.log("Starting to consume from:", process.env.ORDER_READY_QUEUE);
 

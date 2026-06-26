@@ -4,5 +4,15 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "env": {
+    "VITE_STRIPE_PUBLISHABLE_KEY": "pk_test_your_stripe_publishable_key",
+    "VITE_INTERNAL_SERVICE_KEY": "jdfienf12345@@@@##4$$$%%%jsadfjlajdf",
+    "VITE_AUTH_SERVICE": "https://bitedash-auth.vercel.app",
+    "VITE_RESTAURANT_SERVICE": "https://bitedash-restaurant.vercel.app",
+    "VITE_UTILS_SERVICE": "https://bitedash-utils.vercel.app",
+    "VITE_REALTIME_SERVICE": "https://bitedash-realtime.vercel.app",
+    "VITE_RIDER_SERVICE": "https://bitedash-rider.vercel.app",
+    "VITE_ADMIN_SERVICE": "https://bitedash-admin.vercel.app"
+  }
 }

@@ -37,3 +37,5 @@ const PORT = process.env.PORT || 5002;
 app.listen(PORT, () => {
   console.log(`Utils service is running on port ${PORT}`);
 });
+
+export default app;

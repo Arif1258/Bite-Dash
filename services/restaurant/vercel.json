@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "env": {
+    "PORT": "5001",
+    "MONGO_URI": "mongodb+srv://arifahmed:arif7860@cluster0.nvu1g7y.mongodb.net/tomato?appName=Cluster0",
+    "JWT_SEC": "mysupersecret",
+    "INTERNAL_SERVICE_KEY": "jdfienf12345@@@@##4$$$%%%jsadfjlajdf",
+    "RABBITMQ_URL": "amqp://admin:admin123@localhost:5672",
+    "PAYMENT_QUEUE": "payment_event",
+    "RIDER_QUEUE": "rider_queue",
+    "ORDER_READY_QUEUE": "order_ready_queue",
+    "UTILS_SERVICE": "https://bitedash-utils.vercel.app",
+    "REALTIME_SERVICE": "https://bitedash-realtime.vercel.app"
+  },
+  "builds": [
+    {
+      "src": "src/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "src/index.js"
+    }
+  ]
+}

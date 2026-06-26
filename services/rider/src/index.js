@@ -21,3 +21,5 @@ app.listen(process.env.PORT, () => {
   console.log(`Rider service is running on port ${process.env.PORT}`);
   connectDB();
 });
+
+export default app;

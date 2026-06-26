@@ -4,6 +4,10 @@ import { getChannel } from "./rabbitmq.js";
 
 export const startPaymentConsumer = async () => {
   const channel = getChannel();
+  if (!channel) {
+    console.warn("⚠️ RabbitMQ channel not available. Skipping payment consumer startup.");
+    return;
+  }
 
   channel.consume(process.env.PAYMENT_QUEUE, async (msg) => {
     if (!msg) return;

@@ -33,3 +33,5 @@ app.listen(PORT, () => {
   console.log(`Restaurant service is running on port ${PORT}`);
   connectDB();
 });
+
+export default app;

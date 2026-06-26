@@ -21,3 +21,5 @@ initSocket(server);
 server.listen(process.env.PORT, () => {
   console.log(`Realtime service is running port ${process.env.PORT}`);
 });
+
+export default app;

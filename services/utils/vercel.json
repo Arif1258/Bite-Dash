@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "env": {
+    "PORT": "5002",
+    "CLOUD_NAME": "dxmmitkvy",
+    "CLOUD_API_KEY": "154698591848329",
+    "CLOUD_SECRET_KEY": "eU-uRRan3h0VoS7dTU2flSX-nWc",
+    "STRIPE_SECRET_KEY": "sk_test_51TfNwIJQACUs8v5uUFEvPuUMTTG5q173JyxDdhgrSW2DZ6Fv72N1jhGaGepaWG0I0r3Xt2eK1TOHt8EkQFUKdmAw00zeFfsX48",
+    "FRONTEND_URL": "https://bitedash-frontend.vercel.app",
+    "RESTAURANT_SERVICE": "https://bitedash-restaurant.vercel.app",
+    "INTERNAL_SERVICE_KEY": "jdfienf12345@@@@##4$$$%%%jsadfjlajdf",
+    "RABBITMQ_URL": "amqp://admin:admin123@localhost:5672",
+    "PAYMENT_QUEUE": "payment_event",
+    "RAZORPAY_KEY_ID": "rzp_test_SyQUMyasVsiiGz",
+    "RAZORPAY_KEY_SECRET": "VwHdTIkE0C1ndGyJyEzhfZWu"
+  },
+  "builds": [
+    {
+      "src": "src/index.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "src/index.js"
+    }
+  ]
+}
