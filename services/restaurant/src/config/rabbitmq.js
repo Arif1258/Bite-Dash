@@ -16,6 +16,10 @@ export const connectRabbitMQ = async () => {
       durable: true,
     });
 
+    await channel.assertQueue("order_events_queue", {
+      durable: true,
+    });
+
     console.log("🐇 connected To Rabbitmq(restaurant service)");
   } catch (error) {
     console.warn("⚠️ RabbitMQ Connection Failed:", error.message);

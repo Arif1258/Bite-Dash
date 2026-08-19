@@ -51,6 +51,22 @@ const schema = new Schema(
       type: Date,
       default: Date.now,
     },
+    completedDeliveries: {
+      type: Number,
+      default: 0,
+    },
+    cancelledDeliveries: {
+      type: Number,
+      default: 0,
+    },
+    onTimeDeliveries: {
+      type: Number,
+      default: 0,
+    },
+    reliabilityScore: {
+      type: Number,
+      default: 95, // starts at 95%
+    },
   },
   {
     timestamps: true,

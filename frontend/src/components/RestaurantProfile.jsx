@@ -125,13 +125,32 @@ const RestaurantProfile = ({ restaurant, isSeller, onUpdate }) => {
         )}
 
         <div className="flex items-center justify-between pt-3 border-t">
-          <span
-            className={`text-sm font-medium ${
-              isOpen ? "text-green-600" : "text-red-500"
-            }`}
-          >
-            {isOpen ? "OPEN" : "CLOSED"}
-          </span>
+          <div className="flex items-center gap-3">
+            <span
+              className={`text-sm font-medium ${
+                isOpen ? "text-green-600" : "text-red-500"
+              }`}
+            >
+              {isOpen ? "OPEN" : "CLOSED"}
+            </span>
+            {isOpen && (() => {
+              const activeCount = restaurant.activeOrdersCount || 0;
+              let label = "LOW LOAD";
+              let color = "bg-green-50 text-green-700 border-green-200";
+              if (activeCount > 7) {
+                label = "HIGH LOAD";
+                color = "bg-red-50 text-red-700 border-red-200";
+              } else if (activeCount >= 3) {
+                label = "MEDIUM LOAD";
+                color = "bg-yellow-50 text-yellow-700 border-yellow-200";
+              }
+              return (
+                <span className={`text-xs px-2 py-0.5 rounded-full border font-semibold ${color}`}>
+                  {label}
+                </span>
+              );
+            })()}
+          </div>
 
           <div className="flex gap-3">
             {editMode && (

@@ -32,6 +32,13 @@ export const startPaymentConsumer = async () => {
             paymentStatus: "paid",
             status: "placed",
           },
+          $push: {
+            timeline: {
+              status: "placed",
+              timestamp: new Date(),
+              note: "Payment completed successfully. Order sent to restaurant.",
+            },
+          },
           $unset: {
             expiresAt: 1,
           },
@@ -42,6 +49,17 @@ export const startPaymentConsumer = async () => {
       if (!order) {
         channel.ack(msg);
         return;
+      }
+
+      try {
+        const { publishOrderLifecycleEvent } = await import("./order.publisher.js");
+        await publishOrderLifecycleEvent("PAYMENT_COMPLETED", {
+          orderId: order._id.toString(),
+          restaurantId: order.restaurantId,
+          userId: order.userId,
+        });
+      } catch (err) {
+        console.error("Failed to publish PAYMENT_COMPLETED event:", err);
       }
 
       console.log("✅Order Placed:", order._id);

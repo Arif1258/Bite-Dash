@@ -44,6 +44,26 @@ const schema = new Schema(
       type: Boolean,
       default: false,
     },
+    activeOrdersCount: {
+      type: Number,
+      default: 0,
+    },
+    averagePrepTime: {
+      type: Number,
+      default: 20,
+    },
+    reliabilityScore: {
+      type: Number,
+      default: 95,
+    },
+    cancellationCount: {
+      type: Number,
+      default: 0,
+    },
+    totalOrdersCount: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,

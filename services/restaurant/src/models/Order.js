@@ -88,6 +88,24 @@ const OrderSchema = new Schema(
       default: "pending",
     },
 
+    anomalyStatus: {
+      type: String,
+      enum: ["NORMAL", "REVIEW", "HIGH_RISK"],
+      default: "NORMAL",
+    },
+    anomalyReasons: {
+      type: [String],
+      default: [],
+    },
+
+    timeline: [
+      {
+        status: { type: String, required: true },
+        timestamp: { type: Date, default: Date.now },
+        note: String,
+      },
+    ],
+
     expiresAt: {
       type: Date,
       index: { expireAfterSeconds: 0 },

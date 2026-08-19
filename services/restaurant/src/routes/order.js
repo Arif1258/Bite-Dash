@@ -1,5 +1,6 @@
 import express from "express";
 import { isAuth, isSeller } from "../middlewares/isAuth.js";
+import { rateLimiter } from "../middlewares/rateLimiter.js";
 import {
   assignRiderToOrder,
   createOrder,
@@ -16,8 +17,17 @@ const router = express.Router();
 
 router.get("/myorder", isAuth, getMyOrders);
 router.get("/:id", isAuth, fetchSingleOrder);
-router.post("/new", isAuth, createOrder);
-router.get("/payment/:id", fetchOrderForPayment);
+router.post(
+  "/new",
+  isAuth,
+  rateLimiter({ limit: 10, windowSeconds: 60, type: "create-order" }),
+  createOrder
+);
+router.get(
+  "/payment/:id",
+  rateLimiter({ limit: 5, windowSeconds: 60, type: "payment" }),
+  fetchOrderForPayment
+);
 router.get(
   "/restaurant/:restaurantId",
   isAuth,

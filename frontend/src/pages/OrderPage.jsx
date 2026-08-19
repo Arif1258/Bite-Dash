@@ -87,11 +87,65 @@ const OrderPage = () => {
       </div>
     );
   }
+  const steps = [
+    { key: "placed", label: "Order Placed" },
+    { key: "accepted", label: "Restaurant Accepted" },
+    { key: "preparing", label: "Food Being Prepared" },
+    { key: "ready_for_rider", label: "Food Ready" },
+    { key: "rider_assigned", label: "Rider Assigned" },
+    { key: "picked_up", label: "Out for Delivery" },
+    { key: "delivered", label: "Delivered" },
+  ];
+
+  const currentStepIndex = steps.findIndex((s) => s.key === order.status);
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 space-y-6">
       <h1 className="text-xl font-bold">Order #{order._id.slice(-6)}</h1>
-      <div className="rounded-lg bg-blue-50 p-3 text-sm font-medium">
-        Status: <span className="capitalize">{order.status}</span>
+
+      {order.status !== "delivered" && order.status !== "cancelled" && (
+        <div className="rounded-xl bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 p-5 text-white shadow-md flex justify-between items-center animate-fade-in">
+          <div>
+            <p className="text-xs uppercase tracking-wider opacity-90 font-medium">Smart ETA Engine</p>
+            <h2 className="text-3xl font-extrabold mt-1">{order.dynamicETA || 30} mins</h2>
+            <p className="text-xs mt-1 opacity-80">Recalculating live based on restaurant kitchen load</p>
+          </div>
+          <div className="text-3xl animate-bounce">🛵</div>
+        </div>
+      )}
+
+      <div className="rounded-xl bg-white p-5 shadow-sm space-y-4">
+        <h2 className="font-bold text-gray-800 border-b pb-2 text-base">Delivery Timeline</h2>
+        <div className="relative border-l border-gray-200 ml-3 pl-6 space-y-5">
+          {steps.map((step, idx) => {
+            const timelineEntry = order.timeline?.find((t) => t.status === step.key);
+            const isCompleted = timelineEntry || idx <= currentStepIndex;
+            const isActive = order.status === step.key;
+
+            return (
+              <div key={step.key} className="relative">
+                <div className={`absolute -left-[30px] top-1 h-3.5 w-3.5 rounded-full border-2 ${
+                  isActive ? "bg-red-500 border-red-500 animate-ping" : ""
+                }`} />
+                <div className={`absolute -left-[30px] top-1 h-3.5 w-3.5 rounded-full border-2 ${
+                  isActive ? "bg-red-500 border-red-500" :
+                  isCompleted ? "bg-green-500 border-green-500" :
+                  "bg-white border-gray-300"
+                }`} />
+                <div>
+                  <h3 className={`font-semibold text-xs ${isActive ? "text-red-500" : isCompleted ? "text-gray-800" : "text-gray-400"}`}>
+                    {step.label}
+                  </h3>
+                  {timelineEntry && (
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {new Date(timelineEntry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {timelineEntry.note || "Status updated"}
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       <div className="rounded-xl bg-white p-4 shadow-sm space-y-2">

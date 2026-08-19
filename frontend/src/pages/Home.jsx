@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { restaurantService } from "../main";
 import RestaurantCard from "../components/RestaurantCard";
+import SurplusSection from "../components/SurplusSection";
+import RecommendationSection from "../components/RecommendationSection";
 
 const Home = () => {
   const { location } = useAppData();
@@ -13,6 +15,21 @@ const Home = () => {
 
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Track search behavior in background
+  useEffect(() => {
+    if (search.trim()) {
+      axios.post(
+        `${restaurantService}/api/recommendation/track`,
+        { search: search.trim() },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      ).catch(() => {});
+    }
+  }, [search]);
 
   const getDistanceKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
@@ -73,6 +90,9 @@ const Home = () => {
   }
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
+      <SurplusSection />
+      <RecommendationSection />
+
       {restaurants.length > 0 ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
           {restaurants.map((res) => {
