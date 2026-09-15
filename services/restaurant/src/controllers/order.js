@@ -369,25 +369,8 @@ export const getMyOrders = TryCatch(async (req, res) => {
   res.json({ orders });
 });
 
-export const calculateOrderETA = async (order) => {
-  if (order.status === "delivered" || order.status === "cancelled") return 0;
-  try {
-    const RestaurantModel = (await import("../models/Restaurant.js")).default;
-    const restaurant = await RestaurantModel.findById(order.restaurantId);
-    const basePrepTime = restaurant?.averagePrepTime || 20;
-    const activeCount = restaurant?.activeOrdersCount || 0;
-
-    const prepTime = basePrepTime + activeCount * 2;
-    const travelTime = Math.ceil((order.distance || 1) * 3);
-    const driverDelay = order.riderId ? 0 : 5;
-    const buffer = activeCount > 5 ? 8 : 5;
-
-    return prepTime + travelTime + driverDelay + buffer;
-  } catch (err) {
-    console.error("Error calculating ETA:", err);
-    return 30;
-  }
-};
+import { calculateOrderETA, getDetailedETA } from "../services/etaService.js";
+export { calculateOrderETA, getDetailedETA };
 
 export const fetchSingleOrder = TryCatch(async (req, res) => {
   if (!req.user) {
@@ -417,9 +400,10 @@ export const fetchSingleOrder = TryCatch(async (req, res) => {
     });
   }
 
-  const dynamicETA = await calculateOrderETA(order);
+  const etaDetails = await getDetailedETA(order);
   const orderObj = order.toObject();
-  orderObj.dynamicETA = dynamicETA;
+  orderObj.dynamicETA = etaDetails.totalETA;
+  orderObj.etaDetails = etaDetails;
 
   res.json(orderObj);
 });

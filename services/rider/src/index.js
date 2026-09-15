@@ -8,12 +8,20 @@ import { startOrderReadyConsumer } from "./config/orderReady.consumer.js";
 
 dotenv.config();
 
-await connectRabbitMQ();
-startOrderReadyConsumer();
+// RabbitMQ is optional — Vercel serverless has no persistent localhost broker.
+// The service will still handle HTTP routes when RabbitMQ is unavailable.
+try {
+  await connectRabbitMQ();
+  startOrderReadyConsumer();
+} catch (err) {
+  console.warn("⚠️ RabbitMQ init skipped:", err.message);
+}
 
 const app = express();
 app.use(express.json());
 app.use(cors());
+
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "rider" }));
 
 app.use("/api/rider", riderRoutes);
 
@@ -23,3 +31,4 @@ app.listen(process.env.PORT, () => {
 });
 
 export default app;
+

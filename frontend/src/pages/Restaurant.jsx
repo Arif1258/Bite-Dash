@@ -7,6 +7,7 @@ import MenuItems from "../components/MenuItems";
 import AddMenuItem from "../components/AddMenuItem";
 import RestaurantOrders from "../components/RestaurantOrders";
 import RestaurantSurplus from "../components/RestaurantSurplus";
+import DemandSuggestions from "../components/DemandSuggestions";
 
 const Restaurant = () => {
   const [restaurant, setRestaurant] = useState(null);
@@ -92,6 +93,7 @@ const Restaurant = () => {
             { key: "menu", label: "Menu Items" },
             { key: "add-item", label: "Add Item" },
             { key: "surplus", label: "Surplus Food (Save Waste)" },
+            { key: "demand", label: "Smart Demand Forecast" },
             { key: "sales", label: "Sales" },
           ].map((t) => (
             <button
@@ -121,6 +123,9 @@ const Restaurant = () => {
           )}
           {tab === "surplus" && (
             <RestaurantSurplus restaurantId={restaurant._id} />
+          )}
+          {tab === "demand" && (
+            <DemandSuggestions />
           )}
           {tab === "sales" && <p>Sales Page</p>}
         </div>

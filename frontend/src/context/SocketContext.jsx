@@ -23,7 +23,9 @@ export const SocketProvider = ({ children }) => {
       auth: {
         token: localStorage.getItem("token"),
       },
-      transports: ["websocket"],
+      // "polling" first so the connection works on Vercel serverless.
+      // Socket.io will auto-upgrade to "websocket" if the server supports it.
+      transports: ["polling", "websocket"],
     });
 
     socketRef.current = socket;

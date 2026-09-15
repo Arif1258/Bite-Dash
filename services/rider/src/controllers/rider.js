@@ -189,7 +189,7 @@ export const acceptOrder = TryCatch(async (req, res) => {
         orderId,
         riderId: rider._id.toString(),
         riderUserId: rider.userId,
-        riderName: rider.picture,
+        riderName: `Rider ${rider._id.toString().slice(-4).toUpperCase()}`,
         riderPhone: rider.phoneNumber,
       },
       {

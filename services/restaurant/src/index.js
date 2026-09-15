@@ -9,6 +9,8 @@ import orderRoutes from "./routes/order.js";
 import surplusRoutes from "./routes/surplus.js";
 import recommendationRoutes from "./routes/recommendation.js";
 import batchRoutes from "./routes/batch.js";
+import aiSupportRoutes from "./routes/aiSupport.js";
+import demandRoutes from "./routes/demandSuggestion.js";
 import cors from "cors";
 import { connectRabbitMQ } from "./config/rabbitmq.js";
 import { startPaymentConsumer } from "./config/payment.consumer.js";
@@ -16,9 +18,15 @@ import { startOrderEventsConsumer } from "./config/orderEvents.consumer.js";
 
 dotenv.config();
 
-await connectRabbitMQ();
-startPaymentConsumer();
-startOrderEventsConsumer();
+// RabbitMQ is optional — Vercel serverless has no persistent localhost broker.
+// The service will still handle HTTP routes when RabbitMQ is unavailable.
+try {
+  await connectRabbitMQ();
+  startPaymentConsumer();
+  startOrderEventsConsumer();
+} catch (err) {
+  console.warn("⚠️ RabbitMQ init skipped:", err.message);
+}
 
 const app = express();
 
@@ -28,6 +36,8 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 5001;
 
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "restaurant" }));
+
 app.use("/api/restaurant", restaurantRoutes);
 app.use("/api/item", itemRoutes);
 app.use("/api/cart", cartRoutes);
@@ -36,6 +46,8 @@ app.use("/api/order", orderRoutes);
 app.use("/api/surplus", surplusRoutes);
 app.use("/api/recommendation", recommendationRoutes);
 app.use("/api/batch", batchRoutes);
+app.use("/api/support", aiSupportRoutes);
+app.use("/api/demand", demandRoutes);
 
 app.listen(PORT, () => {
   console.log(`Restaurant service is running on port ${PORT}`);

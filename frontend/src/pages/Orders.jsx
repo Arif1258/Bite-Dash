@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
 import axios from "axios";
 import { restaurantService } from "../main";
+import AISupportChat from "../components/AISupportChat";
 
 const ACTIVE_STATUSES = [
   "placed",
@@ -108,6 +109,11 @@ const Orders = () => {
             />
           ))
         )}
+      </section>
+
+      {/* Gen-AI Customer Support Assistant */}
+      <section className="pt-4">
+        <AISupportChat />
       </section>
     </div>
   );

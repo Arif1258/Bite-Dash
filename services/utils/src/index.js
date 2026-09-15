@@ -8,7 +8,10 @@ import { connectRabbitMQ } from "./config/rabbitmq.js";
 
 dotenv.config();
 
-connectRabbitMQ();
+// RabbitMQ is optional — Vercel serverless has no persistent localhost broker.
+connectRabbitMQ().catch((err) =>
+  console.warn("⚠️ RabbitMQ init skipped:", err.message)
+);
 
 const app = express();
 
@@ -28,6 +31,8 @@ cloudinary.v2.config({
   api_key: CLOUD_API_KEY,
   api_secret: CLOUD_SECRET_KEY,
 });
+
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "utils" }));
 
 app.use("/api", uploadRoutes);
 app.use("/api/payment", paymentRoutes);

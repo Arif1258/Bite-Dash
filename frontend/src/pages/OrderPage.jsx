@@ -4,10 +4,13 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { restaurantService } from "../main";
 import UserOrderMap from "../components/UserOrderMap";
+import { useAppData } from "../context/AppContext";
+import AISupportChat from "../components/AISupportChat";
 
 const OrderPage = () => {
   const { id } = useParams();
   const { socket } = useSocket();
+  const { user } = useAppData();
 
   const [order, setOrder] = useState(null);
 
@@ -50,14 +53,15 @@ const OrderPage = () => {
   }, [socket]);
 
   useEffect(() => {
-    if (!socket || !id) return;
-
-    socket.emit("join", `user:${id}`);
+    if (!socket || !user) return;
+    // Join the correct room: user:<userId> (not order id)
+    const room = `user:${user._id}`;
+    socket.emit("join", room);
 
     return () => {
-      socket.emit("leave", `user:${id}`);
+      socket.emit("leave", room);
     };
-  }, [socket, id]);
+  }, [socket, user]);
 
   const [riderLocation, setRiderLocation] = useState(null);
 
@@ -106,11 +110,32 @@ const OrderPage = () => {
       {order.status !== "delivered" && order.status !== "cancelled" && (
         <div className="rounded-xl bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 p-5 text-white shadow-md flex justify-between items-center animate-fade-in">
           <div>
-            <p className="text-xs uppercase tracking-wider opacity-90 font-medium">Smart ETA Engine</p>
-            <h2 className="text-3xl font-extrabold mt-1">{order.dynamicETA || 30} mins</h2>
-            <p className="text-xs mt-1 opacity-80">Recalculating live based on restaurant kitchen load</p>
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] uppercase tracking-wider font-bold opacity-90">Dynamic Live ETA</p>
+              <span className="text-[10px] bg-white/20 backdrop-blur-xs px-2 py-0.5 rounded-full font-semibold">
+                {order.etaDetails?.readable || `${order.dynamicETA || 30} mins`}
+              </span>
+            </div>
+            <h2 className="text-3xl font-extrabold mt-1">
+              {order.dynamicETA || 30} <span className="text-lg font-normal">mins</span>
+            </h2>
+            <p className="text-xs mt-1 opacity-90">
+              {order.etaDetails?.targetDeliveryTime
+                ? `Expected arrival around ${order.etaDetails.targetDeliveryTime}`
+                : "Recalculating live based on restaurant kitchen load & transit distance"}
+            </p>
+            {order.etaDetails?.breakdown && (
+              <div className="flex gap-2 mt-2 text-[10px] font-medium opacity-85">
+                <span className="bg-black/15 px-2 py-0.5 rounded">
+                  🍳 Prep: ~{order.etaDetails.breakdown.prepTime + (order.etaDetails.breakdown.prepDelay || 0)}m
+                </span>
+                <span className="bg-black/15 px-2 py-0.5 rounded">
+                  🛵 Transit: ~{order.etaDetails.breakdown.travelTime}m
+                </span>
+              </div>
+            )}
           </div>
-          <div className="text-3xl animate-bounce">🛵</div>
+          <div className="text-4xl animate-bounce">🛵</div>
         </div>
       )}
 
@@ -202,8 +227,11 @@ const OrderPage = () => {
             ]}
           />
         ) : (
-          <p>Waiting for rider location</p>
+          <p className="text-sm text-gray-500 text-center py-4">📍 Waiting for rider location updates...</p>
         ))}
+
+      {/* AI Customer Support Chat */}
+      <AISupportChat orderId={order._id} />
     </div>
   );
 };

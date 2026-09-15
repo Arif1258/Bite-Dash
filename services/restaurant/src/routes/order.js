@@ -15,28 +15,47 @@ import {
 
 const router = express.Router();
 
+// --- Specific routes MUST come before parameterized /:id routes ---
+
+// Customer: get their orders
 router.get("/myorder", isAuth, getMyOrders);
-router.get("/:id", isAuth, fetchSingleOrder);
-router.post(
-  "/new",
-  isAuth,
-  rateLimiter({ limit: 10, windowSeconds: 60, type: "create-order" }),
-  createOrder
-);
+
+// Internal: get order for payment (called by utils service)
 router.get(
   "/payment/:id",
   rateLimiter({ limit: 5, windowSeconds: 60, type: "payment" }),
   fetchOrderForPayment
 );
+
+// Seller: get orders for their restaurant
 router.get(
   "/restaurant/:restaurantId",
   isAuth,
   isSeller,
   fetchRestaurantOrders,
 );
-router.put("/:orderId", isAuth, isSeller, updateOrderStatus);
+
+// Internal: assign rider to order
 router.put("/assign/rider", assignRiderToOrder);
+
+// Internal: get current order assigned to rider
 router.get("/current/rider", getCurrentOrderForRider);
+
+// Internal: rider updates delivery status (picked_up / delivered)
 router.put("/update/status/rider", updateOrderStatusRider);
+
+// Customer: create new order
+router.post(
+  "/new",
+  isAuth,
+  rateLimiter({ limit: 10, windowSeconds: 60, type: "create-order" }),
+  createOrder
+);
+
+// Seller: update order status (accepted, preparing, ready_for_rider)
+router.put("/:orderId", isAuth, isSeller, updateOrderStatus);
+
+// Customer / Rider / Seller / Admin: view a single order
+router.get("/:id", isAuth, fetchSingleOrder);
 
 export default router;

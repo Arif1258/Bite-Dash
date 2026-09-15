@@ -1,109 +1,97 @@
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
 import TryCatch from "../middlewares/trycatch.js";
+import {
+  generateBatches,
+  evaluatePairBatch,
+  BATCH_CONFIG,
+} from "../services/routeBatchingService.js";
 
-// Proximity calculation helper
-const getDistanceKm = (lat1, lon1, lat2, lon2) => {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return +(R * c).toFixed(2);
-};
-
-// Generate Recommended Batches
+// Generate Recommended Batches (Intelligent Route Batching)
 export const getRecommendedBatches = TryCatch(async (req, res) => {
-  // Find all active orders ready for rider or accepted/preparing
+  const { riderLat, riderLng } = req.query;
+  const riderLocation =
+    riderLat && riderLng
+      ? { latitude: parseFloat(riderLat), longitude: parseFloat(riderLng) }
+      : null;
+
+  // Find all active unassigned orders ready for delivery or preparing
   const activeOrders = await Order.find({
     status: { $in: ["placed", "accepted", "preparing", "ready_for_rider"] },
     riderId: null,
     paymentStatus: "paid",
-  });
+  }).lean();
 
   if (activeOrders.length < 2) {
-    return res.json({ success: true, batches: [], message: "Not enough orders to form batches." });
+    return res.json({
+      success: true,
+      batches: [],
+      config: BATCH_CONFIG,
+      message: "Not enough active orders to form batches.",
+    });
   }
 
-  const recommendations = [];
+  // Efficient batch load of restaurants
+  const restaurantIds = [...new Set(activeOrders.map((o) => o.restaurantId.toString()))];
+  const restaurants = await Restaurant.find({ _id: { $in: restaurantIds } }).lean();
 
-  // Group candidate pairs
-  for (let i = 0; i < activeOrders.length; i++) {
-    for (let j = i + 1; j < activeOrders.length; j++) {
-      const orderA = activeOrders[i];
-      const orderB = activeOrders[j];
+  const restaurantMap = new Map();
+  restaurants.forEach((r) => restaurantMap.set(r._id.toString(), r));
 
-      // Exclude if from same user
-      if (orderA.userId === orderB.userId) continue;
-
-      // Load restaurants
-      const restA = await Restaurant.findById(orderA.restaurantId);
-      const restB = await Restaurant.findById(orderB.restaurantId);
-
-      if (!restA || !restB) continue;
-
-      const [restALng, restALat] = restA.autoLocation.coordinates;
-      const [restBLng, restBLat] = restB.autoLocation.coordinates;
-
-      const restDistance = getDistanceKm(restALat, restALng, restBLat, restBLng);
-      const custDistance = getDistanceKm(
-        orderA.deliveryAddress.latitude,
-        orderA.deliveryAddress.longitude,
-        orderB.deliveryAddress.latitude,
-        orderB.deliveryAddress.longitude
-      );
-
-      // Check threshold filters
-      if (restDistance <= 2.0 && custDistance <= 3.0) {
-        // Calculate similarity score (0 to 100)
-        // Compatibility: Proximity of restaurants (40%), Proximity of customers (40%), route efficiency (20%)
-        const restScore = Math.max(0, 100 - (restDistance * 50));
-        const custScore = Math.max(0, 100 - (custDistance * 33.3));
-        const routeEfficiency = 100 - (Math.abs(orderA.distance - orderB.distance) * 20);
-        
-        const score = Math.round(restScore * 0.4 + custScore * 0.4 + routeEfficiency * 0.2);
-
-        if (score >= 50) {
-          recommendations.push({
-            score,
-            restaurantProximity: `${restDistance} km`,
-            customerProximity: `${custDistance} km`,
-            orders: [
-              {
-                orderId: orderA._id,
-                restaurantName: orderA.restaurantName,
-                totalAmount: orderA.totalAmount,
-                address: orderA.deliveryAddress.fromattedAddress,
-              },
-              {
-                orderId: orderB._id,
-                restaurantName: orderB.restaurantName,
-                totalAmount: orderB.totalAmount,
-                address: orderB.deliveryAddress.fromattedAddress,
-              }
-            ],
-            suggestedRiderRoute: [
-              `Pickup from ${orderA.restaurantName}`,
-              `Pickup from ${orderB.restaurantName}`,
-              `Deliver to Customer A (${orderA.deliveryAddress.fromattedAddress.slice(0, 20)}...)`,
-              `Deliver to Customer B (${orderB.deliveryAddress.fromattedAddress.slice(0, 20)}...)`
-            ]
-          });
-        }
-      }
-    }
-  }
-
-  // Sort batches by highest compatibility score first
-  recommendations.sort((a, b) => b.score - a.score);
+  const batches = generateBatches(activeOrders, restaurantMap, riderLocation);
 
   res.json({
     success: true,
-    batches: recommendations,
+    count: batches.length,
+    batches,
+    config: {
+      maxBatchSize: BATCH_CONFIG.MAX_BATCH_SIZE,
+      maxAdditionalDelayMinutes: BATCH_CONFIG.MAX_ADDITIONAL_DELAY_MINS,
+      maxRestaurantProximityKm: BATCH_CONFIG.MAX_RESTAURANT_DISTANCE_KM,
+      maxCustomerProximityKm: BATCH_CONFIG.MAX_CUSTOMER_DISTANCE_KM,
+    },
+  });
+});
+
+// Evaluate Single Batch Pair
+export const evaluateCustomBatch = TryCatch(async (req, res) => {
+  const { orderIdA, orderIdB } = req.body;
+
+  if (!orderIdA || !orderIdB) {
+    return res.status(400).json({ message: "Both orderIdA and orderIdB are required" });
+  }
+
+  const [orderA, orderB] = await Promise.all([
+    Order.findById(orderIdA).lean(),
+    Order.findById(orderIdB).lean(),
+  ]);
+
+  if (!orderA || !orderB) {
+    return res.status(404).json({ message: "One or both orders not found" });
+  }
+
+  const [restA, restB] = await Promise.all([
+    Restaurant.findById(orderA.restaurantId).lean(),
+    Restaurant.findById(orderB.restaurantId).lean(),
+  ]);
+
+  if (!restA || !restB) {
+    return res.status(404).json({ message: "Restaurants not found for orders" });
+  }
+
+  const evaluation = evaluatePairBatch(orderA, orderB, restA, restB);
+
+  if (!evaluation) {
+    return res.json({
+      success: false,
+      compatible: false,
+      message: "Orders cannot be safely batched without exceeding delay or distance limits.",
+    });
+  }
+
+  res.json({
+    success: true,
+    compatible: true,
+    batch: evaluation,
   });
 });

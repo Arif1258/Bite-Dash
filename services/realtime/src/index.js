@@ -12,6 +12,8 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get("/health", (_req, res) => res.json({ status: "ok", service: "realtime" }));
+
 app.use("/api/v1/internal", internalRoute);
 
 const server = http.createServer(app);
@@ -23,3 +25,4 @@ server.listen(process.env.PORT, () => {
 });
 
 export default app;
+
