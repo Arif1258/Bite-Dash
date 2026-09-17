@@ -114,7 +114,7 @@ const RestaurantPage = () => {
           surplusId: claimingItem._id,
           addressId: selectedAddressId,
           quantity: orderQuantity,
-          paymentMethod: "online",
+          paymentMethod: "cod",
         },
         {
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },

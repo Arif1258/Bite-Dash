@@ -21,6 +21,12 @@ export const createRazorpayOrder = async (req, res) => {
     receipt: orderId,
   });
 
+  await axios.put(
+    `${process.env.RESTAURANT_SERVICE}/api/order/payment/reference`,
+    { orderId, paymentProviderOrderId: razorpayOrder.id },
+    { headers: { "x-internal-key": process.env.INTERNAL_SERVICE_KEY } },
+  );
+
   res.json({
     razorpayOrderId: razorpayOrder.id,
     key: process.env.RAZORPAY_KEY_ID,
@@ -46,6 +52,16 @@ export const verifyRazorpayPayment = async (req, res) => {
       message: "Payment verification failed",
     });
   }
+
+  await axios.put(
+    `${process.env.RESTAURANT_SERVICE}/api/order/payment/confirm`,
+    {
+      orderId,
+      razorpayOrderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+    },
+    { headers: { "x-internal-key": process.env.INTERNAL_SERVICE_KEY } },
+  );
 
   await publishPaymentSuccess({
     orderId,

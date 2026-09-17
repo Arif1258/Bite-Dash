@@ -18,10 +18,15 @@ export const AppProvider = ({ children }) => {
     try {
       const token = localStorage.getItem("token");
 
+      if (!token) {
+        return;
+      }
+
       const { data } = await axios.get(`${authService}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
+        timeout: 12000,
       });
 
       setUser(data);

@@ -7,6 +7,8 @@ import {
   fetchOrderForPayment,
   fetchRestaurantOrders,
   fetchSingleOrder,
+  savePaymentReference,
+  confirmRazorpayPayment,
   getCurrentOrderForRider,
   getMyOrders,
   updateOrderStatus,
@@ -26,6 +28,9 @@ router.get(
   rateLimiter({ limit: 5, windowSeconds: 60, type: "payment" }),
   fetchOrderForPayment
 );
+
+router.put("/payment/reference", savePaymentReference);
+router.put("/payment/confirm", confirmRazorpayPayment);
 
 // Seller: get orders for their restaurant
 router.get(

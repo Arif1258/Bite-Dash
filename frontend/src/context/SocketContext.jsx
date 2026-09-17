@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { useAppData } from "./AppContext";
 import { realtimeService } from "../main";
@@ -9,11 +9,13 @@ export const SocketProvider = ({ children }) => {
   const { isAuth } = useAppData();
 
   const socketRef = useRef(null);
+  const [socket, setSocket] = useState(null);
 
   useEffect(() => {
     if (!isAuth) {
       socketRef.current?.disconnect();
       socketRef.current = null;
+      setSocket(null);
       return;
     }
 
@@ -29,6 +31,7 @@ export const SocketProvider = ({ children }) => {
     });
 
     socketRef.current = socket;
+    setSocket(socket);
 
     socket.on("connect", () => {
       console.log("Socket Connected", socket.id);
@@ -45,11 +48,12 @@ export const SocketProvider = ({ children }) => {
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setSocket(null);
     };
   }, [isAuth]);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current }}>
+    <SocketContext.Provider value={{ socket }}>
       {children}
     </SocketContext.Provider>
   );

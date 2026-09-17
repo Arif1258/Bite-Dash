@@ -78,7 +78,7 @@ const OrderSchema = new Schema(
 
     paymentMethod: {
       type: String,
-      enum: ["razorpay", "stripe"],
+      enum: ["razorpay", "stripe", "cod"],
       required: true,
     },
 
@@ -86,6 +86,14 @@ const OrderSchema = new Schema(
       type: String,
       enum: ["pending", "paid", "failed"],
       default: "pending",
+    },
+    paymentProviderOrderId: {
+      type: String,
+      default: null,
+    },
+    paymentId: {
+      type: String,
+      default: null,
     },
 
     anomalyStatus: {

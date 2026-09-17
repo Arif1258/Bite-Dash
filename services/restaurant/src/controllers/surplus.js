@@ -114,7 +114,7 @@ export const purchaseSurplusItem = TryCatch(async (req, res) => {
     return res.status(401).json({ message: "Unauthorized. Please log in." });
   }
 
-  const { surplusId, addressId, quantity = 1, paymentMethod = "online" } = req.body;
+  const { surplusId, addressId, quantity = 1 } = req.body;
 
   if (!surplusId || !addressId) {
     return res.status(400).json({ message: "Surplus ID and delivery address are required" });
@@ -184,6 +184,8 @@ export const purchaseSurplusItem = TryCatch(async (req, res) => {
     userId: user._id.toString(),
     restaurantId: restaurant._id,
     restaurantName: restaurant.name,
+    addressId: address._id.toString(),
+    riderAmount: 0,
     items: [
       {
         name: `[Surplus] ${surplusItem.name}`,
@@ -193,7 +195,7 @@ export const purchaseSurplusItem = TryCatch(async (req, res) => {
     ],
     subtotal,
     deliveryFee,
-    platformFee,
+    platfromFee: platformFee,
     totalAmount,
     deliveryAddress: {
       fromattedAddress: address.formattedAddress || address.address || "Customer Address",
@@ -202,8 +204,8 @@ export const purchaseSurplusItem = TryCatch(async (req, res) => {
       mobile: address.mobile || user.phone,
     },
     distance,
-    paymentMethod,
-    paymentStatus: paymentMethod === "cod" ? "paid" : "paid", // Instant mark paid for demo/real flow
+    paymentMethod: "cod",
+    paymentStatus: "pending",
     status: "placed",
     timeline: [
       {

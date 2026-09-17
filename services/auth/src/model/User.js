@@ -5,15 +5,24 @@ const schema = new Schema(
     name: {
       type: String,
       required: true,
+      trim: true,
+      maxlength: 100,
     },
     email: {
       type: String,
       required: true,
       unique: true,
+      trim: true,
+      lowercase: true,
+      maxlength: 254,
     },
     image: {
       type: String,
-      required: true,
+      default: "",
+    },
+    passwordHash: {
+      type: String,
+      select: false,
     },
     role: {
       type: String,

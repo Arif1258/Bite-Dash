@@ -201,6 +201,44 @@ export const fetchOrderForPayment = TryCatch(async (req, res) => {
   });
 });
 
+export const savePaymentReference = TryCatch(async (req, res) => {
+  if (req.headers["x-internal-key"] !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const { orderId, paymentProviderOrderId } = req.body;
+  if (!orderId || !paymentProviderOrderId) {
+    return res.status(400).json({ message: "Order and provider payment IDs are required" });
+  }
+
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, paymentStatus: "pending", paymentProviderOrderId: null },
+    { $set: { paymentProviderOrderId } },
+    { new: true },
+  );
+  if (!order) return res.status(409).json({ message: "Order cannot accept a new payment reference" });
+  return res.json({ success: true });
+});
+
+export const confirmRazorpayPayment = TryCatch(async (req, res) => {
+  if (req.headers["x-internal-key"] !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const { orderId, razorpayOrderId, paymentId } = req.body;
+  if (!orderId || !razorpayOrderId || !paymentId) {
+    return res.status(400).json({ message: "Order, provider order, and payment IDs are required" });
+  }
+
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId, paymentStatus: "pending", paymentProviderOrderId: razorpayOrderId },
+    { $set: { paymentStatus: "paid", paymentId } },
+    { new: true },
+  );
+  if (!order) return res.status(400).json({ message: "Payment does not match a pending order" });
+  return res.json({ success: true, order });
+});
+
 export const fetchRestaurantOrders = TryCatch(async (req, res) => {
   const user = req.user;
 
@@ -222,7 +260,7 @@ export const fetchRestaurantOrders = TryCatch(async (req, res) => {
 
   const orders = await Order.find({
     restaurantId,
-    paymentStatus: "paid",
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   })
     .sort({ createdAt: -1 })
     .limit(limit);
@@ -363,7 +401,7 @@ export const getMyOrders = TryCatch(async (req, res) => {
 
   const orders = await Order.find({
     userId: req.user._id.toString(),
-    paymentStatus: "paid",
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   }).sort({ createdAt: -1 });
 
   res.json({ orders });

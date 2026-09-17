@@ -100,7 +100,7 @@ const SurplusSection = () => {
           surplusId: claimingItem._id,
           addressId: selectedAddressId,
           quantity: orderQuantity,
-          paymentMethod: "online",
+          paymentMethod: "cod",
         },
         {
           headers: {

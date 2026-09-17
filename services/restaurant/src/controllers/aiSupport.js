@@ -99,7 +99,7 @@ async function executeGetMyOrders(userId, args) {
   const limit = Math.min(args.limit || 5, 10);
   const orders = await Order.find({
     userId: userId.toString(),
-    paymentStatus: "paid",
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   })
     .sort({ createdAt: -1 })
     .limit(limit)
@@ -285,7 +285,7 @@ async function executeGetLatestActiveOrder(userId) {
   const order = await Order.findOne({
     userId: userId.toString(),
     status: { $nin: ["delivered", "cancelled"] },
-    paymentStatus: "paid",
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   })
     .sort({ createdAt: -1 })
     .lean();
@@ -294,7 +294,7 @@ async function executeGetLatestActiveOrder(userId) {
     // Try to find the most recent order (including delivered)
     const lastOrder = await Order.findOne({
       userId: userId.toString(),
-      paymentStatus: "paid",
+      $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
     })
       .sort({ createdAt: -1 })
       .lean();
