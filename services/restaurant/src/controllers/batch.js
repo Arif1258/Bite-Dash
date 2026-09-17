@@ -9,6 +9,10 @@ import {
 
 // Generate Recommended Batches (Intelligent Route Batching)
 export const getRecommendedBatches = TryCatch(async (req, res) => {
+  if (!req.user || !["rider", "admin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Only riders and administrators can view delivery batches" });
+  }
+
   const { riderLat, riderLng } = req.query;
   const riderLocation =
     riderLat && riderLng
@@ -55,6 +59,10 @@ export const getRecommendedBatches = TryCatch(async (req, res) => {
 
 // Evaluate Single Batch Pair
 export const evaluateCustomBatch = TryCatch(async (req, res) => {
+  if (!req.user || !["rider", "admin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Only riders and administrators can evaluate delivery batches" });
+  }
+
   const { orderIdA, orderIdB } = req.body;
 
   if (!orderIdA || !orderIdB) {
