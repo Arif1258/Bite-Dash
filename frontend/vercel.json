@@ -13,6 +13,6 @@
     "VITE_UTILS_SERVICE": "https://bitedash-utils.vercel.app",
     "VITE_REALTIME_SERVICE": "https://bitedash-realtime.vercel.app",
     "VITE_RIDER_SERVICE": "https://bitedash-rider.vercel.app",
-    "VITE_ADMIN_SERVICE": "https://bitedash-admin.vercel.app"
+    "VITE_ADMIN_SERVICE": "https://bitedash-admin-eight.vercel.app"
   }
 }

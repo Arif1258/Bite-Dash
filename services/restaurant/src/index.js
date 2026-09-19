@@ -34,6 +34,16 @@ app.use(cors());
 
 app.use(express.json());
 
+app.use(async (_req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (error) {
+    console.error("Database connection failed:", error.message);
+    res.status(503).json({ message: "Restaurant service is temporarily unavailable" });
+  }
+});
+
 const PORT = process.env.PORT || 5001;
 
 app.get("/health", (_req, res) => res.json({ status: "ok", service: "restaurant" }));
