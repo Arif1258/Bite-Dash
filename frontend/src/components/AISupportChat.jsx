@@ -2,13 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { restaurantService } from "../main";
 import { useAppData } from "../context/AppContext";
+import { 
+  Bot, Send, X, Sparkles, Clock, Package, 
+  MapPin, HelpCircle, ChevronRight, MessageSquare, ShieldCheck, Minimize2 
+} from "lucide-react";
 
 const AISupportChat = ({ orderId, isFloating = false }) => {
   const { user } = useAppData();
   const [messages, setMessages] = useState([
     {
       role: "model",
-      text: "👋 Hi! I'm your BiteDash AI Order Assistant. Ask me anything about your order, preparation status, live ETA, rider updates, or recent meals!",
+      text: "👋 Hi! I'm **BiteDash AI Order Assistant**.\n\nPowered by live order telemetry and our intelligent ETA engine, I can look up your preparation status, live ETA, rider updates, or recent food receipts.\n\nHow can I help you right now?",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -27,11 +31,19 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     }
   }, [messages, loading, isOpen]);
 
+  // Global event listener to open chat from navbar or hero CTA
+  useEffect(() => {
+    const handleOpenAi = () => setIsOpen(true);
+    window.addEventListener("open-ai-support", handleOpenAi);
+    return () => window.removeEventListener("open-ai-support", handleOpenAi);
+  }, []);
+
   const quickPrompts = [
-    orderId ? `Where is order #${orderId.slice(-6)}?` : "Where is my order?",
-    "What's the status of my order?",
-    "When will my food arrive?",
+    orderId ? `Where is order #${orderId.slice(-6).toUpperCase()}?` : "Where is my order?",
+    "What's my ETA?",
+    "What did I order?",
     "Show me my latest order.",
+    "What is the cancellation policy?",
   ];
 
   const sendMessage = async (messageText) => {
@@ -99,126 +111,130 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    sendMessage();
-  };
-
+  // If floating and closed, render the floating trigger pill
   if (isFloating && !isOpen) {
     return (
-      <div className="fixed bottom-6 right-6 z-50">
-        <button
-          onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2.5 rounded-full bg-gradient-to-r from-red-600 to-orange-500 px-5 py-3.5 text-white font-bold text-sm shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300 group"
-        >
-          <span className="text-xl group-hover:rotate-12 transition-transform">🤖</span>
-          <span>AI Order Support</span>
-          <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse"></span>
-        </button>
-      </div>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-indigo-700 text-white px-4 py-3 rounded-full shadow-2xl hover:scale-105 transition-all duration-200 border-2 border-white/20 cursor-pointer group"
+        aria-label="Open BiteDash AI Support Chat"
+      >
+        <div className="relative">
+          <Bot className="w-5 h-5 text-white" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-white animate-pulse"></span>
+        </div>
+        <span className="text-xs font-black tracking-wide">AI Order Support</span>
+      </button>
     );
   }
 
   const containerClasses = isFloating
-    ? "fixed bottom-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] rounded-2xl border border-gray-200 bg-white shadow-2xl overflow-hidden animate-scale-in"
-    : "bg-white rounded-2xl border border-gray-200 shadow-lg overflow-hidden transition-all duration-300";
+    ? "fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[420px] h-[580px] max-h-[85vh] rounded-3xl shadow-2xl border border-slate-200/80 bg-white flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
+    : "w-full h-[520px] rounded-3xl border border-slate-200/80 bg-white flex flex-col overflow-hidden shadow-sm";
 
   return (
     <div className={containerClasses}>
-      {/* Header */}
-      <div className="bg-gradient-to-r from-red-600 to-orange-500 px-5 py-3.5 text-white flex items-center justify-between shadow-xs">
+      {/* Chat Header */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 flex items-center justify-between border-b border-white/10 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center font-bold text-base shadow-inner">
-            🤖
+          <div className="relative">
+            <div className="h-10 w-10 bg-gradient-to-tr from-red-500 via-rose-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20 ring-2 ring-white/10">
+              <Bot className="w-5 h-5 text-white" />
+            </div>
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-slate-900 animate-pulse"></span>
           </div>
+
           <div>
-            <h3 className="font-bold text-sm tracking-wide">BiteDash AI Support</h3>
-            <p className="text-[11px] text-white/90 flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse inline-block"></span>
-              Live Order Intelligence
-            </p>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm text-white">BiteDash Copilot</h3>
+              <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-400/30">
+                Live Tools
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium">Real-time Order &amp; ETA Telemetry</p>
           </div>
         </div>
-        <button
-          onClick={() => setIsOpen((prev) => !prev)}
-          className="text-white/80 hover:text-white text-xs font-semibold px-2 py-1 rounded-lg hover:bg-white/10 transition"
-        >
-          {isFloating ? "✕ Close" : isOpen ? "Minimize" : "Expand"}
-        </button>
+
+        {isFloating && (
+          <button
+            onClick={() => setIsOpen(false)}
+            className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+            aria-label="Close chat"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
-      {isOpen && (
-        <div className="flex flex-col h-[440px]">
-          {/* Messages Area */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
-            {messages.map((msg, index) => {
-              const isUser = msg.role === "user";
-              return (
-                <div
-                  key={index}
-                  className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}
-                >
-                  <div
-                    className={`max-w-[88%] rounded-2xl px-4 py-2.5 text-xs shadow-xs leading-relaxed whitespace-pre-wrap ${
-                      isUser
-                        ? "bg-[#E23744] text-white rounded-tr-none font-medium"
-                        : "bg-white text-gray-800 border border-gray-100 rounded-tl-none font-normal"
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-1 px-1">{msg.time}</span>
-                </div>
-              );
-            })}
+      {/* Quick Actions Carousel */}
+      <div className="bg-slate-50 border-b border-slate-100 px-3 py-2 overflow-x-auto flex gap-1.5 no-scrollbar">
+        {quickPrompts.map((prompt, i) => (
+          <button
+            key={i}
+            onClick={() => sendMessage(prompt)}
+            disabled={loading}
+            className="flex-shrink-0 text-[11px] font-semibold bg-white hover:bg-red-50 text-slate-700 hover:text-red-700 border border-slate-200 hover:border-red-300 rounded-full px-3 py-1 transition-all shadow-2xs cursor-pointer disabled:opacity-50"
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
 
-            {loading && (
-              <div className="flex items-center gap-2 text-gray-400 text-xs py-2 px-1">
-                <div className="flex gap-1">
-                  <span className="w-2 h-2 bg-red-400 rounded-full animate-bounce"></span>
-                  <span className="w-2 h-2 bg-red-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                  <span className="w-2 h-2 bg-red-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                </div>
-                <span>Checking live order database...</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Quick Prompt Chips */}
-          <div className="p-2.5 bg-white border-t border-gray-100 flex gap-1.5 overflow-x-auto no-scrollbar">
-            {quickPrompts.map((prompt, i) => (
-              <button
-                key={i}
-                onClick={() => sendMessage(prompt)}
-                disabled={loading}
-                className="text-[11px] whitespace-nowrap bg-gray-100 hover:bg-red-50 hover:text-red-600 text-gray-700 px-3 py-1.5 rounded-full transition font-medium border border-gray-200/70 disabled:opacity-50"
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-
-          {/* Input Bar */}
-          <form onSubmit={handleSubmit} className="p-3 bg-white border-t border-gray-100 flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about ETA, status, items, rider..."
-              disabled={loading}
-              className="flex-1 text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-[#E23744] bg-gray-50/50"
-            />
-            <button
-              type="submit"
-              disabled={loading || !input.trim()}
-              className="bg-[#E23744] hover:bg-red-600 disabled:opacity-50 text-white rounded-xl px-4 py-2 text-xs font-bold transition flex items-center justify-center shadow-xs"
+      {/* Messages Scroll Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/40 custom-scrollbar">
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+          >
+            <div
+              className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs ${
+                msg.role === "user"
+                  ? "bg-red-600 text-white rounded-br-none"
+                  : "bg-white text-slate-800 rounded-bl-none border border-slate-200/70"
+              }`}
             >
-              Send
-            </button>
-          </form>
-        </div>
-      )}
+              <div className="whitespace-pre-wrap">{msg.text}</div>
+            </div>
+            <span className="text-[10px] text-slate-400 mt-1 px-1">{msg.time}</span>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="flex items-center gap-2 text-xs text-indigo-700 font-semibold p-2.5 bg-indigo-50/70 rounded-2xl w-fit border border-indigo-100 animate-pulse">
+            <div className="h-3.5 w-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+            <span>Inspecting live kitchen orders &amp; rider telemetry...</span>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Footer */}
+      <div className="p-3 border-t border-slate-100 bg-white">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            sendMessage();
+          }}
+          className="flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder='Ask: "Where is my food?", "What is my ETA?"...'
+            className="flex-1 bg-slate-50 border border-slate-200 focus:border-red-500 focus:bg-white text-xs rounded-xl px-3.5 py-2.5 outline-none transition placeholder:text-slate-400"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || loading}
+            className="h-9 w-9 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition shadow-md shadow-red-600/20 flex-shrink-0 cursor-pointer"
+            aria-label="Send message"
+          >
+            <Send className="w-3.5 h-3.5" />
+          </button>
+        </form>
+      </div>
     </div>
   );
 };

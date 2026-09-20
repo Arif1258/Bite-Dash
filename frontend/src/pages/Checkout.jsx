@@ -2,20 +2,23 @@ import { useEffect, useState } from "react";
 import { useAppData } from "../context/AppContext";
 import axios from "axios";
 import { restaurantService, utilsService } from "../main";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
-import { BiCreditCard, BiLoader } from "react-icons/bi";
+import { 
+  CreditCard, Banknote, ShieldCheck, MapPin, 
+  Plus, CheckCircle2, ChevronRight, Store, ArrowLeft, Loader2, Sparkles 
+} from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 
 const Checkout = () => {
   const { cart, subTotal, quauntity } = useAppData();
+  const navigate = useNavigate();
 
   const [addresses, setAddresses] = useState([]);
-
   const [selectedAddressId, setselectedAddressId] = useState(null);
-
   const [loadingAddress, setLoadingAddress] = useState(true);
 
+  const [selectedPayment, setSelectedPayment] = useState("stripe"); // 'stripe' | 'razorpay' | 'cod'
   const [loadingRazorpay, setLoadingRazorpay] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [loadingCOD, setLoadingCOD] = useState(false);
@@ -38,7 +41,11 @@ const Checkout = () => {
           },
         );
 
-        setAddresses(data || []);
+        const addrList = data || [];
+        setAddresses(addrList);
+        if (addrList.length > 0) {
+          setselectedAddressId(addrList[0]._id);
+        }
       } catch (error) {
         console.log(error);
       } finally {
@@ -49,26 +56,30 @@ const Checkout = () => {
     fetchAddresses();
   }, [cart]);
 
-  const navigate = useNavigate();
-
   if (!cart || cart.length === 0) {
     return (
-      <div className="flex min-h-[60vh] item-center justify-center">
-        <p className="text-gray-500 text-lg">Your cart is empty</p>
+      <div className="flex min-h-[60vh] items-center justify-center bg-slate-50 px-4">
+        <div className="text-center bg-white p-8 rounded-3xl border border-slate-200/70 shadow-xs max-w-sm">
+          <p className="text-slate-500 text-sm font-medium mb-4">Your cart is currently empty</p>
+          <Link to="/" className="px-5 py-2.5 bg-red-600 text-white rounded-xl text-xs font-bold shadow-md">
+            Find Food
+          </Link>
+        </div>
       </div>
     );
   }
 
   const restaurant = cart[0].restaurantId;
-
+  const restaurantName = cart[0].item?.restaurantName || "Partner Restaurant";
   const deliveryFee = subTotal < 250 ? 49 : 0;
-
   const platformFee = 7;
-
   const grandTotal = subTotal + deliveryFee + platformFee;
 
   const createOrder = async (paymentMethod) => {
-    if (!selectedAddressId) return null;
+    if (!selectedAddressId) {
+      toast.error("Please select a delivery address");
+      return null;
+    }
 
     setCreatingOrder(true);
     try {
@@ -87,7 +98,8 @@ const Checkout = () => {
 
       return data;
     } catch (error) {
-      toast.error("Failed to create Order");
+      toast.error(error.response?.data?.message || "Failed to create order");
+      return null;
     } finally {
       setCreatingOrder(false);
     }
@@ -96,26 +108,20 @@ const Checkout = () => {
   const payWithRazorpay = async () => {
     try {
       setLoadingRazorpay(true);
-
       const order = await createOrder("razorpay");
       if (!order) return;
 
       const { orderId, amount } = order;
-
-      const { data } = await axios.post(`${utilsService}/api/payment/create`, {
-        orderId,
-      });
-
+      const { data } = await axios.post(`${utilsService}/api/payment/create`, { orderId });
       const { razorpayOrderId, key } = data;
 
       const options = {
         key,
         amount: amount * 100,
         currency: "INR",
-        name: "BiteDash", //your business name
+        name: "BiteDash",
         description: "Food Order Payment",
         order_id: razorpayOrderId,
-
         handler: async (response) => {
           try {
             await axios.post(`${utilsService}/api/payment/verify`, {
@@ -125,22 +131,19 @@ const Checkout = () => {
               orderId,
             });
 
-            toast.success("Payment successfull 🎉");
+            toast.success("Payment successful 🎉");
             navigate("/paymentsuccess/" + response.razorpay_payment_id);
           } catch (error) {
             toast.error("Payment verification failed");
           }
         },
-        theme: {
-          color: "#E23744",
-        },
+        theme: { color: "#E23744" },
       };
 
       const razorpay = new window.Razorpay(options);
       razorpay.open();
     } catch (error) {
-      console.log(error);
-      toast.error("Payment Failed please refresh page");
+      toast.error("Razorpay initiation failed");
     } finally {
       setLoadingRazorpay(false);
     }
@@ -154,29 +157,18 @@ const Checkout = () => {
       const order = await createOrder("stripe");
       if (!order) return;
 
-      const { orderId } = order;
+      await stripePromise;
+      const { data } = await axios.post(`${utilsService}/api/payment/stripe/create`, {
+        orderId: order.orderId,
+      });
 
-      try {
-        await stripePromise;
-
-        const { data } = await axios.post(
-          `${utilsService}/api/payment/stripe/create`,
-          {
-            orderId,
-          },
-        );
-
-        if (data.url) {
-          window.location.href = data.url;
-        } else {
-          toast.error("failed to create payment session");
-        }
-      } catch (error) {
-        toast.error("Payment Failed");
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        toast.error("Failed to create Stripe session");
       }
     } catch (error) {
-      console.log(error);
-      toast.error("Payment failed");
+      toast.error("Stripe payment failed to initialize");
     } finally {
       setLoadingStripe(false);
     }
@@ -190,142 +182,275 @@ const Checkout = () => {
       toast.success("Order placed successfully with Cash on Delivery 🎉");
       navigate(`/order/${order.orderId}`);
     } catch (error) {
-      console.log(error);
       toast.error("Failed to place Cash on Delivery order");
     } finally {
       setLoadingCOD(false);
     }
   };
 
+  const handleProcessPayment = () => {
+    if (selectedPayment === "stripe") payWithStripe();
+    else if (selectedPayment === "razorpay") payWithRazorpay();
+    else if (selectedPayment === "cod") payWithCOD();
+  };
+
+  const isProcessing = creatingOrder || loadingStripe || loadingRazorpay || loadingCOD;
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-bold">Checkout</h1>
+    <div className="min-h-screen bg-slate-50/60 py-8 px-4 sm:px-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Navigation Breadcrumb */}
+        <div className="flex items-center gap-3">
+          <Link to="/cart" className="p-2 bg-white rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-100 transition shadow-2xs">
+            <ArrowLeft className="w-4 h-4" />
+          </Link>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Checkout</h1>
+            <p className="text-xs text-slate-500 font-medium">Select delivery address and payment method</p>
+          </div>
+        </div>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">{restaurant.name}</h2>
-        <p className="text-sm text-gray-500">
-          {restaurant.autoLocation.formattedAddress}
-        </p>
-      </div>
+        {/* 2-Column Checkout Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Left Column: Address & Payment Options */}
+          <div className="lg:col-span-7 space-y-6">
+            
+            {/* 1. Delivery Address Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-sm">
+                    1
+                  </div>
+                  <h3 className="font-bold text-base text-slate-900">Delivery Address</h3>
+                </div>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
-        <h3 className="font-semibold">Delivery Address</h3>
-
-        {loadingAddress ? (
-          <p className="text-sm text-gray-500">Loading addresses...</p>
-        ) : addresses.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No address found. Please add one
-          </p>
-        ) : (
-          addresses.map((add) => (
-            <label
-              key={add._id}
-              className={`flex gap-3 rounded-lg border p-3 cursor-pointer transition ${
-                selectedAddressId === add._id
-                  ? "border-[#e23744] bg-red-50"
-                  : "hover:bg-gray-50"
-              }`}
-            >
-              <input
-                type="radio"
-                checked={selectedAddressId === add._id}
-                onChange={() => setselectedAddressId(add._id)}
-              />
-
-              <div>
-                <p className="text-sm font-medium">{add.formattedAddress}</p>
-                <p className="text-xs text-gray-500">{add.mobile}</p>
+                <Link to="/address" className="text-xs font-bold text-red-600 hover:underline flex items-center gap-1">
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Address
+                </Link>
               </div>
-            </label>
-          ))
-        )}
-      </div>
 
-      <div className="rounded-xl bg-white p-4 shadow-sm space-y-4">
-        <h3 className="font-semibold">Order Summary</h3>
+              {loadingAddress ? (
+                <div className="p-4 bg-slate-50 rounded-2xl animate-pulse h-20"></div>
+              ) : addresses.length === 0 ? (
+                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800 space-y-2">
+                  <p className="font-semibold">No saved addresses found.</p>
+                  <Link
+                    to="/address"
+                    className="inline-block px-4 py-2 bg-amber-600 text-white font-bold rounded-xl text-xs"
+                  >
+                    Add Your Delivery Address
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {addresses.map((addr) => {
+                    const isSelected = selectedAddressId === addr._id;
+                    return (
+                      <div
+                        key={addr._id}
+                        onClick={() => setselectedAddressId(addr._id)}
+                        className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start justify-between gap-3 ${
+                          isSelected
+                            ? "border-red-600 bg-red-50/40 shadow-xs ring-1 ring-red-600"
+                            : "border-slate-200/80 hover:bg-slate-50"
+                        }`}
+                      >
+                        <div className="flex items-start gap-3 min-w-0">
+                          <MapPin className={`w-4 h-4 mt-0.5 flex-shrink-0 ${isSelected ? "text-red-600" : "text-slate-400"}`} />
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-xs text-slate-900 capitalize block">
+                              {addr.addressType || "Home"}
+                            </span>
+                            <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
+                              {addr.formattedAddress || addr.address}
+                            </p>
+                          </div>
+                        </div>
 
-        {cart.map((cartItem) => {
-          const item = cartItem.itemId;
-
-          return (
-            <div className="flex justify-between text-sm" key={cartItem._id}>
-              <span>
-                {item.name} x {cartItem.quauntity}
-              </span>
-              <span>₹{item.price * cartItem.quauntity}</span>
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 mt-0.5 ${
+                          isSelected ? "border-red-600 bg-red-600" : "border-slate-300"
+                        }`}>
+                          {isSelected && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          );
-        })}
 
-        <hr />
+            {/* 2. Payment Method Card */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold text-sm">
+                  2
+                </div>
+                <h3 className="font-bold text-base text-slate-900">Payment Option</h3>
+              </div>
 
-        <div className="flex justify-between text-sm">
-          <span>Items ({quauntity})</span>
-          <span>₹{subTotal}</span>
+              <div className="space-y-2.5">
+                {/* Stripe / Online Card */}
+                <div
+                  onClick={() => setSelectedPayment("stripe")}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedPayment === "stripe"
+                      ? "border-red-600 bg-red-50/40 shadow-xs ring-1 ring-red-600"
+                      : "border-slate-200/80 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Card / NetBanking / Stripe</h4>
+                      <p className="text-[11px] text-slate-500">Fast, secure 128-bit encrypted checkout</p>
+                    </div>
+                  </div>
+
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    selectedPayment === "stripe" ? "border-red-600 bg-red-600" : "border-slate-300"
+                  }`}>
+                    {selectedPayment === "stripe" && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                  </div>
+                </div>
+
+                {/* Razorpay Option */}
+                <div
+                  onClick={() => setSelectedPayment("razorpay")}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedPayment === "razorpay"
+                      ? "border-red-600 bg-red-50/40 shadow-xs ring-1 ring-red-600"
+                      : "border-slate-200/80 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">
+                      <Sparkles className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">UPI / QR Code / Razorpay</h4>
+                      <p className="text-[11px] text-slate-500">Google Pay, PhonePe, Paytm, or UPI ID</p>
+                    </div>
+                  </div>
+
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    selectedPayment === "razorpay" ? "border-red-600 bg-red-600" : "border-slate-300"
+                  }`}>
+                    {selectedPayment === "razorpay" && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                  </div>
+                </div>
+
+                {/* Cash on Delivery (COD) */}
+                <div
+                  onClick={() => setSelectedPayment("cod")}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                    selectedPayment === "cod"
+                      ? "border-red-600 bg-red-50/40 shadow-xs ring-1 ring-red-600"
+                      : "border-slate-200/80 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                      <Banknote className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Cash on Delivery</h4>
+                      <p className="text-[11px] text-slate-500">Pay cash or UPI directly to rider upon arrival</p>
+                    </div>
+                  </div>
+
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                    selectedPayment === "cod" ? "border-red-600 bg-red-600" : "border-slate-300"
+                  }`}>
+                    {selectedPayment === "cod" && <div className="w-2 h-2 rounded-full bg-white"></div>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Order Items Summary & Payment Button */}
+          <div className="lg:col-span-5 space-y-4">
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs space-y-4">
+              
+              {/* Restaurant Header */}
+              <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
+                <div className="w-10 h-10 rounded-xl bg-red-50 text-red-600 flex items-center justify-center font-bold">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold text-slate-900 truncate">{restaurantName}</h3>
+                  <p className="text-[11px] text-slate-400 font-medium">BiteDash Express Delivery</p>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                {cart.map((c) => (
+                  <div key={c._id} className="flex justify-between items-center text-xs">
+                    <span className="text-slate-700 font-medium truncate max-w-[200px]">
+                      {c.item?.name} × {c.quauntity}
+                    </span>
+                    <span className="font-bold text-slate-900">
+                      ₹{(c.item?.price || 0) * c.quauntity}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pricing Breakdown */}
+              <div className="pt-3 border-t border-slate-100 space-y-2 text-xs font-medium text-slate-600">
+                <div className="flex justify-between">
+                  <span>Item Total</span>
+                  <span className="font-bold text-slate-900">₹{subTotal}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Delivery Partner Fee</span>
+                  <span className="font-bold text-slate-900">
+                    {deliveryFee === 0 ? <span className="text-emerald-600 uppercase text-[10px]">Free</span> : `₹${deliveryFee}`}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Platform Fee</span>
+                  <span className="font-bold text-slate-900">₹{platformFee}</span>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex justify-between items-baseline text-sm">
+                  <span className="font-black text-slate-900">Grand Total</span>
+                  <span className="text-2xl font-black text-slate-900">₹{grandTotal}</span>
+                </div>
+              </div>
+
+              {/* Confirm & Pay Button */}
+              <button
+                onClick={handleProcessPayment}
+                disabled={isProcessing || !selectedAddressId}
+                className="w-full py-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-black text-sm rounded-2xl transition shadow-xl shadow-red-600/30 flex items-center justify-center gap-2 cursor-pointer mt-2"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Processing Order...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Confirm &amp; Place Order (₹{grandTotal})</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <div className="pt-2 flex items-center justify-center gap-2 text-[11px] text-slate-400 font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Protected by BiteDash Safe Delivery Guarantee</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div className="flex justify-between text-sm">
-          <span>Delivery Fee</span>
-          <span>{deliveryFee === 0 ? "Free" : `₹${deliveryFee}`}</span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span>PlatForm Fee</span>
-          <span>₹{platformFee}</span>
-        </div>
-
-        {subTotal < 250 && (
-          <p className="text-xs text-gray-500">
-            Add Item worth ₹{250 - subTotal} more to get Free delivery
-          </p>
-        )}
-
-        <div className="flex justify-between text-base font-semibold border-t pt-2">
-          <span>Grand Total</span>
-          <span>₹{grandTotal}</span>
-        </div>
-      </div>
-
-      <div className="rounded-xl bg-white p-4 shadow-sm space-y-3">
-        <h3 className="font-semibold">Payment Method</h3>
-
-        <button
-          disabled={!selectedAddressId || loadingCOD || creatingOrder}
-          onClick={payWithCOD}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E23744] py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
-        >
-          {loadingCOD ? (
-            <BiLoader size={18} className="animate-spin" />
-          ) : (
-            <span>💵</span>
-          )}
-          Cash on Delivery (Pay at Doorstep)
-        </button>
-
-        <button
-          disabled={!selectedAddressId || loadingRazorpay || creatingOrder}
-          onClick={payWithRazorpay}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2D7FF9] py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
-        >
-          {loadingRazorpay ? (
-            <BiLoader size={18} className="animate-spin" />
-          ) : (
-            <BiCreditCard size={18} />
-          )}
-          Pay With Razorpay
-        </button>
-
-        <button
-          disabled={!selectedAddressId || loadingStripe || creatingOrder}
-          onClick={payWithStripe}
-          className="flex w-full items-center justify-center gap-2 rounded-lg bg-black py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {loadingStripe ? (
-            <BiLoader size={18} className="animate-spin" />
-          ) : (
-            <BiCreditCard size={18} />
-          )}
-          Pay With Stripe
-        </button>
       </div>
     </div>
   );

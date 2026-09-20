@@ -24,10 +24,23 @@ const Footer = () => {
               <Link to="/" className="hover:text-white transition-colors">Home</Link>
             </li>
             <li>
+              <Link to="/surplus-deals" className="hover:text-emerald-400 text-emerald-300 font-bold transition-colors flex items-center gap-1">
+                🌱 Surplus Deals (Up to 70% Off)
+              </Link>
+            </li>
+            <li>
               <Link to="/cart" className="hover:text-white transition-colors">Cart</Link>
             </li>
             <li>
-              <Link to="/orders" className="hover:text-white transition-colors">Your Orders</Link>
+              <Link to="/orders" className="hover:text-white transition-colors">Track Orders</Link>
+            </li>
+            <li>
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent("open-ai-support"))}
+                className="hover:text-indigo-300 text-left cursor-pointer transition-colors"
+              >
+                🤖 BiteDash AI Support
+              </button>
             </li>
           </ul>
         </div>
