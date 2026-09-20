@@ -1,21 +1,33 @@
 /**
- * ETA Calculation Engine
+ * Intelligent ETA Engine
  *
- * Computes dynamic, realistic estimated delivery times based on:
- * - Restaurant baseline prep time
- * - Kitchen congestion / active order load (delay factor)
- * - Rider assignment status & proximity
- * - Travel distance approximation (~3.5 mins/km city speed)
- * - Order status lifecycle & elapsed time
+ * Formula:
+ * ETA = Food Preparation Time + Kitchen Queue Time + Rider Travel Time + Additional Delay
  *
- * Edge cases handled:
- * - Cancelled or delivered orders (ETA = 0)
- * - Missing location / distance (sensible default)
- * - Orders already preparing, ready, or picked up (elapsed time subtracted)
- * - Rider unassigned delay buffer
+ * Dynamically factors:
+ * - Restaurant food preparation time (baseline per restaurant or default)
+ * - Current kitchen/order queue (live count of pending orders in database)
+ * - Rider availability (unassigned dispatch buffer, en route, picked up)
+ * - Estimated travel time (distance-based with time-of-day traffic conditions)
+ * - Additional restaurant / rider delay (buffer, batch detour delay if applicable)
+ * - Elapsed time subtraction across order lifecycle
  */
 
 import Restaurant from "../models/Restaurant.js";
+import Order from "../models/Order.js";
+
+/**
+ * Returns traffic multiplier based on time of day (rush hours)
+ * Lunch rush: 12:00 - 14:30 -> 1.25x
+ * Dinner rush: 19:00 - 22:00 -> 1.30x
+ * Late night / off-peak: 1.0x
+ */
+function getTrafficFactor() {
+  const hour = new Date().getHours();
+  if (hour >= 12 && hour <= 14) return 1.25;
+  if (hour >= 19 && hour <= 22) return 1.3;
+  return 1.0;
+}
 
 /**
  * Calculates detailed ETA breakdown for an order.
@@ -28,7 +40,13 @@ export async function getDetailedETA(order) {
       totalETA: 30,
       readable: "25-35 mins",
       status: "unknown",
-      breakdown: { prepTime: 20, prepDelay: 0, assignmentTime: 5, travelTime: 5, buffer: 0, elapsedMinutes: 0 },
+      breakdown: {
+        foodPreparationTime: 20,
+        kitchenQueueTime: 5,
+        riderTravelTime: 10,
+        additionalDelay: 5,
+        elapsedMinutes: 0,
+      },
     };
   }
 
@@ -38,7 +56,13 @@ export async function getDetailedETA(order) {
       totalETA: 0,
       readable: "Delivered",
       status: "delivered",
-      breakdown: { prepTime: 0, prepDelay: 0, assignmentTime: 0, travelTime: 0, buffer: 0, elapsedMinutes: 0 },
+      breakdown: {
+        foodPreparationTime: 0,
+        kitchenQueueTime: 0,
+        riderTravelTime: 0,
+        additionalDelay: 0,
+        elapsedMinutes: 0,
+      },
     };
   }
 
@@ -47,92 +71,126 @@ export async function getDetailedETA(order) {
       totalETA: 0,
       readable: "Cancelled",
       status: "cancelled",
-      breakdown: { prepTime: 0, prepDelay: 0, assignmentTime: 0, travelTime: 0, buffer: 0, elapsedMinutes: 0 },
+      breakdown: {
+        foodPreparationTime: 0,
+        kitchenQueueTime: 0,
+        riderTravelTime: 0,
+        additionalDelay: 0,
+        elapsedMinutes: 0,
+      },
     };
   }
 
   try {
     let restaurant = null;
-    if (order.restaurantId) {
-      // Support if order.restaurantId is populated or an ID
-      if (typeof order.restaurantId === "object" && order.restaurantId.name) {
-        restaurant = order.restaurantId;
+    let restaurantId = order.restaurantId;
+
+    if (restaurantId) {
+      if (typeof restaurantId === "object" && restaurantId.name) {
+        restaurant = restaurantId;
+        restaurantId = restaurant._id;
       } else {
-        restaurant = await Restaurant.findById(order.restaurantId).lean();
+        restaurant = await Restaurant.findById(restaurantId).lean();
       }
     }
 
-    const basePrepTime = restaurant?.averagePrepTime || 20;
-    const activeCount = restaurant?.activeOrdersCount || 0;
+    // 1. Food Preparation Time (baseline)
+    const foodPreparationTime = restaurant?.averagePrepTime || 20;
 
-    // Congestion delay: 2 mins per concurrent active order at the restaurant
-    const prepDelay = Math.min(activeCount * 2, 20);
-
-    // Buffer for kitchen queue when load is heavy
-    const buffer = activeCount > 5 ? 8 : (activeCount > 2 ? 5 : 2);
-
-    // Distance travel time estimation (~3.5 min/km city transit)
-    const distanceKm = order.distance || 3.0;
-    const travelTime = Math.max(5, Math.ceil(distanceKm * 3.5));
-
-    // Rider assignment delay
-    let assignmentTime = 0;
-    if (!order.riderId && !["ready_for_rider", "rider_assigned", "picked_up"].includes(order.status)) {
-      assignmentTime = 5; // buffer to find and assign nearby rider
-    } else if (order.status === "ready_for_rider" && !order.riderId) {
-      assignmentTime = 6; // waiting for rider dispatch
-    } else if (order.status === "rider_assigned") {
-      assignmentTime = 3; // rider en route to pickup
+    // 2. Kitchen Queue Time based on real pending orders in DB
+    let pendingOrdersCount = 0;
+    try {
+      if (restaurantId) {
+        pendingOrdersCount = await Order.countDocuments({
+          restaurantId: restaurantId.toString(),
+          _id: { $ne: order._id },
+          status: { $in: ["placed", "accepted", "preparing"] },
+        });
+      }
+    } catch {
+      pendingOrdersCount = restaurant?.activeOrdersCount || 0;
     }
 
-    // Elapsed time calculation
+    // ~2.5 mins per pending order in kitchen queue, capped at 25 mins
+    const kitchenQueueTime = Math.min(Math.round(pendingOrdersCount * 2.5), 25);
+
+    // 3. Rider Travel Time (Distance + Traffic multiplier)
+    const distanceKm = Number(order.distance) || 3.0;
+    const trafficMultiplier = getTrafficFactor();
+    const baseTravelMinutes = distanceKm * 3.5; // ~3.5 min/km city speed
+    const riderTravelTime = Math.max(4, Math.ceil(baseTravelMinutes * trafficMultiplier));
+
+    // 4. Additional Delay (Rider dispatch assignment buffer, kitchen buffer, batch detour)
+    let additionalDelay = 0;
+
+    if (!order.riderId) {
+      if (["placed", "accepted", "preparing"].includes(order.status)) {
+        additionalDelay += 5; // buffer for assigning nearby rider
+      } else if (order.status === "ready_for_rider") {
+        additionalDelay += 6; // waiting for rider dispatch
+      }
+    } else if (order.status === "rider_assigned") {
+      additionalDelay += 3; // rider en route to pickup
+    }
+
+    // If order is part of a batched delivery route, factor in detour / multi-stop delay
+    if (order.isBatched) {
+      additionalDelay += 4;
+    }
+
+    // Additional restaurant buffer if queue is large
+    if (pendingOrdersCount > 5) {
+      additionalDelay += 4;
+    }
+
+    // 5. Elapsed time tracking
     const orderCreatedAt = order.createdAt ? new Date(order.createdAt).getTime() : Date.now();
     const elapsedMinutes = Math.max(0, Math.floor((Date.now() - orderCreatedAt) / 60000));
 
-    let remainingPrep = 0;
+    // Dynamic computation based on current delivery status
     let totalETA = 0;
+    let remainingPrep = 0;
 
     switch (order.status) {
       case "placed":
       case "accepted":
-        // Full prep + buffer + travel + assignment
-        remainingPrep = basePrepTime + prepDelay;
-        totalETA = remainingPrep + assignmentTime + travelTime + buffer;
+        // Full prep + queue + travel + additional delay
+        remainingPrep = foodPreparationTime + kitchenQueueTime;
+        totalETA = remainingPrep + riderTravelTime + additionalDelay;
         break;
 
       case "preparing":
-        // Kitchen is actively cooking — subtract elapsed time from prep phase
-        const totalEstimatedPrep = basePrepTime + prepDelay;
-        remainingPrep = Math.max(4, totalEstimatedPrep - elapsedMinutes);
-        totalETA = remainingPrep + assignmentTime + travelTime + Math.floor(buffer / 2);
+        // Actively cooking: subtract elapsed time from prep phase
+        const totalEstimatedPrep = foodPreparationTime + kitchenQueueTime;
+        remainingPrep = Math.max(3, totalEstimatedPrep - elapsedMinutes);
+        totalETA = remainingPrep + riderTravelTime + Math.max(2, additionalDelay - 2);
         break;
 
       case "ready_for_rider":
-        // Food is ready! Prep time is zero. Only awaiting rider pickup & transit.
+        // Food is ready! Prep time is 0. Only awaiting rider dispatch & transit
         remainingPrep = 0;
-        totalETA = (order.riderId ? 2 : 5) + travelTime;
+        totalETA = (order.riderId ? 2 : 5) + riderTravelTime;
         break;
 
       case "rider_assigned":
-        // Rider assigned and proceeding to pickup
-        remainingPrep = Math.max(0, (basePrepTime + prepDelay) - elapsedMinutes);
-        totalETA = remainingPrep + 3 + travelTime;
+        // Rider assigned, picking up food
+        remainingPrep = Math.max(0, (foodPreparationTime + kitchenQueueTime) - elapsedMinutes);
+        totalETA = remainingPrep + 3 + riderTravelTime;
         break;
 
       case "picked_up":
       case "out_for_delivery":
-        // Food has been picked up by rider — only remaining transit time
+        // Food picked up and on route to customer
         remainingPrep = 0;
-        assignmentTime = 0;
-        // If elapsed time since pickup exists, approximate remaining travel
-        totalETA = Math.max(3, travelTime - Math.min(travelTime - 3, Math.floor(elapsedMinutes * 0.5)));
+        const remainingTransit = Math.max(3, riderTravelTime - Math.floor(elapsedMinutes * 0.4));
+        totalETA = remainingTransit + (order.isBatched ? 3 : 0);
         break;
 
       default:
-        totalETA = basePrepTime + travelTime + assignmentTime;
+        totalETA = foodPreparationTime + kitchenQueueTime + riderTravelTime + additionalDelay;
     }
 
-    // Round and establish realistic floor
+    // Final safety bounds
     totalETA = Math.max(2, Math.round(totalETA));
 
     const targetDate = new Date(Date.now() + totalETA * 60000);
@@ -142,29 +200,35 @@ export async function getDetailedETA(order) {
       status: order.status,
       readable: `${Math.max(1, totalETA - 3)}-${totalETA + 3} mins`,
       targetDeliveryTime: targetDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      trafficLevel: trafficMultiplier > 1.2 ? "Heavy" : trafficMultiplier > 1.0 ? "Moderate" : "Normal",
+      pendingQueueOrders: pendingOrdersCount,
       breakdown: {
-        prepTime: basePrepTime,
-        prepDelay,
-        assignmentTime,
-        travelTime,
-        buffer,
+        foodPreparationTime,
+        kitchenQueueTime,
+        riderTravelTime,
+        additionalDelay,
         elapsedMinutes,
       },
     };
   } catch (err) {
-    console.error("ETA Calculation Service Error:", err);
+    console.error("Intelligent ETA Engine Error:", err);
     return {
       totalETA: 30,
       readable: "25-35 mins",
       status: order.status || "placed",
-      breakdown: { prepTime: 20, prepDelay: 0, assignmentTime: 5, travelTime: 5, buffer: 0, elapsedMinutes: 0 },
+      breakdown: {
+        foodPreparationTime: 20,
+        kitchenQueueTime: 5,
+        riderTravelTime: 10,
+        additionalDelay: 5,
+        elapsedMinutes: 0,
+      },
     };
   }
 }
 
 /**
- * Backwards compatible function returning integer minutes.
- * Matches existing call signature: calculateOrderETA(order)
+ * Returns integer minutes for backwards compatibility.
  * @param {Object} order
  * @returns {Promise<number>} ETA in minutes
  */
@@ -174,7 +238,11 @@ export async function calculateOrderETA(order) {
   return result.totalETA;
 }
 
+export const calculateDynamicETA = calculateOrderETA;
+
 export default {
   calculateOrderETA,
+  calculateDynamicETA,
   getDetailedETA,
 };
+

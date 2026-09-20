@@ -150,6 +150,23 @@ export const verifyStripe = async (req, res) => {
       });
     }
 
+    try {
+      await axios.put(
+        `${process.env.RESTAURANT_SERVICE}/api/order/payment/confirm-stripe`,
+        {
+          orderId,
+          paymentId: sessionId,
+        },
+        {
+          headers: {
+            "x-internal-key": process.env.INTERNAL_SERVICE_KEY,
+          },
+        },
+      );
+    } catch (httpErr) {
+      console.warn("⚠️ Direct HTTP stripe confirmation warning:", httpErr.message);
+    }
+
     await publishPaymentSuccess({
       orderId,
       paymentId: sessionId,
@@ -158,8 +175,10 @@ export const verifyStripe = async (req, res) => {
 
     res.json({
       message: "payment verified successfully",
+      orderId,
     });
   } catch (error) {
+    console.error("Stripe verify error:", error.message);
     res.status(500).json({
       message: "stripe payment failed",
     });

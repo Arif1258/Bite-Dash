@@ -1,111 +1,202 @@
 import UserPreference from "../models/UserPreference.js";
 import Restaurant from "../models/Restaurant.js";
 import MenuItems from "../models/MenuItems.js";
+import Order from "../models/Order.js";
+import SurplusInventory from "../models/SurplusInventory.js";
 import TryCatch from "../middlewares/trycatch.js";
 
-// Fetch Personalized Recommendations
+// ─── Time-of-Day Categorization Helper ────────────────────────────────────
+
+function getTimeCategory(currentHour = new Date().getHours()) {
+  if (currentHour >= 5 && currentHour < 12) {
+    return {
+      period: "Morning",
+      mealType: "Breakfast",
+      description: "Fresh morning breakfast picks, hot coffees, juices & bakeries",
+      badge: "🌅 Morning Breakfast Pick",
+      keywords: ["breakfast", "dosa", "idli", "paratha", "poha", "sandwich", "coffee", "tea", "omelette", "juice", "bakery"],
+    };
+  }
+  if (currentHour >= 12 && currentHour < 17) {
+    return {
+      period: "Afternoon",
+      mealType: "Lunch",
+      description: "Hearty lunch meals, thalis, biryanis & wholesome bowls",
+      badge: "☀️ Afternoon Lunch Special",
+      keywords: ["lunch", "thali", "biryani", "rice", "curry", "roti", "meals", "dal", "pulao", "paneer", "chicken"],
+    };
+  }
+  if (currentHour >= 17 && currentHour < 21) {
+    return {
+      period: "Evening",
+      mealType: "Snacks & Beverages",
+      description: "Crispy snacks, street delicacies, hot chai & cooling sips",
+      badge: "☕ Evening Snack & Sip",
+      keywords: ["snack", "chaat", "samosa", "momo", "chai", "coffee", "fries", "burger", "pizza", "roll", "shake"],
+    };
+  }
+  return {
+    period: "Night",
+    mealType: "Dinner & Late-Night",
+    description: "Comforting dinners, pizzas, desserts & late-night munchies",
+    badge: "🌙 Late-Night Dinner Choice",
+    keywords: ["dinner", "biryani", "pizza", "noodles", "chinese", "dessert", "midnight", "rolls", "curry"],
+  };
+}
+
+// ─── Fetch Personalized Rule-Based Recommendations ────────────────────────
+
 export const getRecommendations = TryCatch(async (req, res) => {
   const user = req.user;
-  if (!user) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
+  const timeInfo = getTimeCategory();
 
-  const userId = user._id.toString();
+  // Find all verified, currently open restaurants
+  const openRestaurants = await Restaurant.find({ isOpen: true, isVerified: true }).lean();
+  const openRestaurantIds = openRestaurants.map((r) => r._id);
 
-  // Find or create default preferences
-  let pref = await UserPreference.findOne({ userId });
-  if (!pref) {
-    pref = await UserPreference.create({ userId });
-  }
-
-  // Define response structure
   const recommendations = {
-    becauseYouOrdered: [],
-    popularTimeBased: [],
-    restaurantsYouMayLike: [],
-    trySomethingDifferent: [],
+    timeBased: {
+      period: timeInfo.period,
+      mealType: timeInfo.mealType,
+      description: timeInfo.description,
+      badge: timeInfo.badge,
+      items: [],
+    },
+    becauseYouOrdered: null,
+    surplusDeals: [],
+    trendingRestaurants: [],
   };
 
-  // Section 1: "Because you ordered X"
-  if (pref.favoriteDishes.length > 0) {
-    const favoriteDishName = pref.favoriteDishes[0];
-    const matchingItems = await MenuItems.find({
-      name: { $regex: favoriteDishName, $options: "i" },
-    })
-      .limit(4)
-      .populate("restaurantId", "name image");
-    
-    recommendations.becauseYouOrdered = {
-      dish: favoriteDishName,
-      items: matchingItems,
-    };
-  } else {
-    // Fallback: Generic top dishes
-    const fallbackDishes = await MenuItems.find({}).limit(4).populate("restaurantId", "name image");
-    recommendations.becauseYouOrdered = {
-      dish: "Popular Choices",
-      items: fallbackDishes,
-    };
-  }
+  // ─── 1. Time-Based Recommendations ───────────────────────────────────────
+  // Find menu items matching the current time keywords at open restaurants
+  const keywordRegexes = timeInfo.keywords.map((k) => new RegExp(k, "i"));
 
-  // Section 2: "Popular during your usual time" (Time-based recommendation)
-  const hour = new Date().getHours();
-  let timeTag = "Dinner";
-  if (hour < 12) timeTag = "Breakfast";
-  else if (hour < 16) timeTag = "Lunch";
-  else if (hour < 19) timeTag = "Snacks";
-
-  // Find menu items matching the timeTag in description/name or simply popular items
-  const timeBasedItems = await MenuItems.find({
+  let timeItems = await MenuItems.find({
+    restaurantId: { $in: openRestaurantIds },
+    isAvailable: true,
     $or: [
-      { name: { $regex: timeTag, $options: "i" } },
-      { description: { $regex: timeTag, $options: "i" } },
+      { name: { $in: keywordRegexes } },
+      { description: { $in: keywordRegexes } },
     ],
   })
-    .limit(4)
-    .populate("restaurantId", "name image");
+    .limit(6)
+    .populate("restaurantId", "name image autoLocation")
+    .lean();
 
-  recommendations.popularTimeBased = {
-    timeOfDay: timeTag,
-    items: timeBasedItems.length > 0 ? timeBasedItems : await MenuItems.find({}).skip(2).limit(4).populate("restaurantId", "name image"),
-  };
-
-  // Section 3: "Restaurants you may like" (Based on preferred cuisines)
-  if (pref.cuisinePreferences.length > 0) {
-    const matchingRestaurants = await Restaurant.find({
-      isOpen: true,
-      description: { $in: pref.cuisinePreferences.map(c => new RegExp(c, "i")) },
-    }).limit(4);
-
-    recommendations.restaurantsYouMayLike = matchingRestaurants;
-  } else {
-    // Fallback: Open verified restaurants
-    recommendations.restaurantsYouMayLike = await Restaurant.find({ isOpen: true, isVerified: true }).limit(4);
+  // Fallback: If no keyword matches, select general items from open restaurants
+  if (timeItems.length === 0) {
+    timeItems = await MenuItems.find({
+      restaurantId: { $in: openRestaurantIds },
+      isAvailable: true,
+    })
+      .limit(6)
+      .populate("restaurantId", "name image autoLocation")
+      .lean();
   }
 
-  // Section 4: "Try something different" (Explore other cuisines)
-  const allCuisines = ["Pizza", "Burgers", "Biryani", "Chinese", "Desserts", "South Indian", "North Indian"];
-  const unexploredCuisines = allCuisines.filter((c) => !pref.cuisinePreferences.includes(c));
-  
-  const queryCuisine = unexploredCuisines[Math.floor(Math.random() * unexploredCuisines.length)] || "North Indian";
+  recommendations.timeBased.items = timeItems.map((item) => ({
+    ...item,
+    ruleExplanation: `${timeInfo.badge} — Best enjoyed during ${timeInfo.period}`,
+  }));
 
-  const alternativeRestaurants = await Restaurant.find({
-    isOpen: true,
-    description: { $regex: queryCuisine, $options: "i" },
-  }).limit(4);
+  // ─── 2. "Because You Ordered" (User History / Preferences) ────────────────
+  if (user) {
+    // Look up real past orders
+    const pastOrders = await Order.find({
+      userId: user._id.toString(),
+      $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
+    })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
 
-  recommendations.trySomethingDifferent = {
-    cuisine: queryCuisine,
-    restaurants: alternativeRestaurants.length > 0 ? alternativeRestaurants : await Restaurant.find({ isOpen: true }).skip(1).limit(4),
-  };
+    if (pastOrders.length > 0) {
+      // Find the most frequently or recently ordered item
+      const itemCounts = {};
+      pastOrders.forEach((o) => {
+        (o.items || []).forEach((i) => {
+          itemCounts[i.name] = (itemCounts[i.name] || 0) + 1;
+        });
+      });
+
+      const topOrderedItem = Object.keys(itemCounts).sort((a, b) => itemCounts[b] - itemCounts[a])[0];
+
+      if (topOrderedItem) {
+        // Find matching items currently available
+        const matchingItems = await MenuItems.find({
+          name: { $regex: topOrderedItem, $options: "i" },
+          isAvailable: true,
+          restaurantId: { $in: openRestaurantIds },
+        })
+          .limit(4)
+          .populate("restaurantId", "name image")
+          .lean();
+
+        if (matchingItems.length > 0) {
+          recommendations.becauseYouOrdered = {
+            itemKeyword: topOrderedItem,
+            badge: `⭐ Because you ordered "${topOrderedItem}"`,
+            items: matchingItems.map((item) => ({
+              ...item,
+              ruleExplanation: `Recommended based on your past craving for ${topOrderedItem}`,
+            })),
+          };
+        }
+      }
+    }
+  }
+
+  // Fallback for "Because You Ordered" if guest or no past orders
+  if (!recommendations.becauseYouOrdered && openRestaurantIds.length > 0) {
+    const popularItems = await MenuItems.find({
+      restaurantId: { $in: openRestaurantIds },
+      isAvailable: true,
+    })
+      .skip(2)
+      .limit(4)
+      .populate("restaurantId", "name image")
+      .lean();
+
+    recommendations.becauseYouOrdered = {
+      itemKeyword: "Popular Favorites",
+      badge: "⭐ Customer All-Time Favorites",
+      items: popularItems.map((item) => ({
+        ...item,
+        ruleExplanation: "High customer rating and repeat orders",
+      })),
+    };
+  }
+
+  // ─── 3. Surplus Food Integration (Value Deals) ───────────────────────────
+  const now = new Date();
+  const surplusItems = await SurplusInventory.find({
+    restaurantId: { $in: openRestaurantIds },
+    quantity: { $gt: 0 },
+    expiresAt: { $gt: now },
+    status: "active",
+  })
+    .limit(4)
+    .populate("restaurantId", "name image autoLocation")
+    .sort({ expiresAt: 1 })
+    .lean();
+
+  recommendations.surplusDeals = surplusItems.map((s) => ({
+    ...s,
+    ruleExplanation: `🌱 Surplus Eco-Deal: Save food waste with ${Math.round(((s.originalPrice - s.discountPrice) / s.originalPrice) * 100)}% discount!`,
+  }));
+
+  // ─── 4. Trending Open Restaurants ─────────────────────────────────────────
+  recommendations.trendingRestaurants = openRestaurants.slice(0, 4);
 
   res.json({
     success: true,
+    currentHour: new Date().getHours(),
     recommendations,
   });
 });
 
-// Track Search / Preference Action
+// ─── Track Search / Preference Action ─────────────────────────────────────
+
 export const trackSearchPreference = TryCatch(async (req, res) => {
   const user = req.user;
   if (!user) return res.status(401).json({ message: "Unauthorized" });

@@ -43,11 +43,16 @@ const Navbar = () => {
           </Link>
 
           {isAuth ? (
-            <Link to="/account" className="font-medium text-[#E23744]">
-              Account
-            </Link>
+            <>
+              <Link to="/orders" className="font-medium text-gray-700 hover:text-[#E23744] text-sm">
+                Orders
+              </Link>
+              <Link to="/account" className="font-medium text-[#E23744] text-sm">
+                Account
+              </Link>
+            </>
           ) : (
-            <Link to="/Login" className="font-medium text-[#E23744]">
+            <Link to="/login" className="font-medium text-[#E23744] text-sm">
               Login
             </Link>
           )}

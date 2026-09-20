@@ -5,8 +5,11 @@ import { useAppData } from "../context/AppContext";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
+import { useSocket } from "../context/SocketContext";
+
 const SurplusSection = () => {
   const { location, user } = useAppData();
+  const { socket } = useSocket();
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,6 +27,7 @@ const SurplusSection = () => {
       if (location?.latitude && location?.longitude) {
         params.latitude = location.latitude;
         params.longitude = location.longitude;
+        params.maxDistanceKm = 5; // 5 km radius
       }
 
       const { data } = await axios.get(`${restaurantService}/api/surplus/active`, {
@@ -43,6 +47,21 @@ const SurplusSection = () => {
   useEffect(() => {
     fetchSurplus();
   }, [location]);
+
+  // Real-time nearby surplus alert listener
+  useEffect(() => {
+    if (!socket) return;
+    const handleNearbySurplus = (data) => {
+      toast(
+        `🌱 Nearby Deal Alert: ${data.name} is available at ${data.restaurantName} for ₹${data.discountPrice} (${data.discountPercent}% OFF, ~${data.distanceKm} km)!`,
+        { icon: "⚡", duration: 7000 }
+      );
+      fetchSurplus();
+    };
+
+    socket.on("surplus:nearby_alert", handleNearbySurplus);
+    return () => socket.off("surplus:nearby_alert", handleNearbySurplus);
+  }, [socket]);
 
   // Real-time ticking timers helper
   const [now, setNow] = useState(new Date());

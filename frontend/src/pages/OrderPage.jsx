@@ -125,17 +125,38 @@ const OrderPage = () => {
                 : "Recalculating live based on restaurant kitchen load & transit distance"}
             </p>
             {order.etaDetails?.breakdown && (
-              <div className="flex gap-2 mt-2 text-[10px] font-medium opacity-85">
-                <span className="bg-black/15 px-2 py-0.5 rounded">
-                  🍳 Prep: ~{order.etaDetails.breakdown.prepTime + (order.etaDetails.breakdown.prepDelay || 0)}m
+              <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-medium opacity-90">
+                <span className="bg-black/20 px-2 py-0.5 rounded">
+                  🍳 Prep: ~{order.etaDetails.breakdown.foodPreparationTime}m
                 </span>
-                <span className="bg-black/15 px-2 py-0.5 rounded">
-                  🛵 Transit: ~{order.etaDetails.breakdown.travelTime}m
+                <span className="bg-black/20 px-2 py-0.5 rounded">
+                  ⏳ Kitchen Queue: ~{order.etaDetails.breakdown.kitchenQueueTime}m
                 </span>
+                <span className="bg-black/20 px-2 py-0.5 rounded">
+                  🛵 Transit: ~{order.etaDetails.breakdown.riderTravelTime}m
+                </span>
+                {order.etaDetails.trafficLevel && order.etaDetails.trafficLevel !== "Normal" && (
+                  <span className="bg-black/20 px-2 py-0.5 rounded">
+                    🚦 {order.etaDetails.trafficLevel} Traffic
+                  </span>
+                )}
               </div>
             )}
           </div>
           <div className="text-4xl animate-bounce">🛵</div>
+        </div>
+      )}
+
+      {/* Batched Delivery Notification Banner */}
+      {order.isBatched && (
+        <div className="rounded-xl bg-purple-50 border border-purple-200 p-4 text-xs text-purple-900 flex items-start gap-3 shadow-xs">
+          <span className="text-xl">📦</span>
+          <div>
+            <h4 className="font-bold text-sm text-purple-950">Intelligent Eco-Route Delivery</h4>
+            <p className="text-[11px] text-purple-800 mt-0.5">
+              Your rider is delivering an optimized nearby batched delivery route. This reduces carbon footprint while maintaining prompt arrival within your estimated window!
+            </p>
+          </div>
         </div>
       )}
 

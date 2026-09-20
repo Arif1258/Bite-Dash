@@ -6,8 +6,11 @@ import {
   evaluatePairBatch,
   BATCH_CONFIG,
 } from "../services/routeBatchingService.js";
+import { getDetailedETA } from "../services/etaService.js";
+import axios from "axios";
 
-// Generate Recommended Batches (Intelligent Route Batching)
+// ─── 1. Generate Recommended Batches ────────────────────────────────────────
+
 export const getRecommendedBatches = TryCatch(async (req, res) => {
   if (!req.user || !["rider", "admin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Only riders and administrators can view delivery batches" });
@@ -19,11 +22,11 @@ export const getRecommendedBatches = TryCatch(async (req, res) => {
       ? { latitude: parseFloat(riderLat), longitude: parseFloat(riderLng) }
       : null;
 
-  // Find all active unassigned orders ready for delivery or preparing
+  // Find all active unassigned orders (including COD)
   const activeOrders = await Order.find({
     status: { $in: ["placed", "accepted", "preparing", "ready_for_rider"] },
     riderId: null,
-    paymentStatus: "paid",
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   }).lean();
 
   if (activeOrders.length < 2) {
@@ -57,7 +60,8 @@ export const getRecommendedBatches = TryCatch(async (req, res) => {
   });
 });
 
-// Evaluate Single Batch Pair
+// ─── 2. Evaluate Custom Batch Pair ──────────────────────────────────────────
+
 export const evaluateCustomBatch = TryCatch(async (req, res) => {
   if (!req.user || !["rider", "admin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Only riders and administrators can evaluate delivery batches" });
@@ -101,5 +105,102 @@ export const evaluateCustomBatch = TryCatch(async (req, res) => {
     success: true,
     compatible: true,
     batch: evaluation,
+  });
+});
+
+// ─── 3. Accept Batched Route (Rider accepts 2 orders together) ───────────────
+
+export const acceptBatchedRoute = TryCatch(async (req, res) => {
+  const user = req.user;
+  if (!user || user.role !== "rider") {
+    return res.status(403).json({ message: "Only riders can accept delivery batches" });
+  }
+
+  const { orderIdA, orderIdB, riderName, riderPhone } = req.body;
+
+  if (!orderIdA || !orderIdB) {
+    return res.status(400).json({ message: "Both orderIdA and orderIdB are required" });
+  }
+
+  const [orderA, orderB] = await Promise.all([
+    Order.findById(orderIdA),
+    Order.findById(orderIdB),
+  ]);
+
+  if (!orderA || !orderB) {
+    return res.status(404).json({ message: "One or both orders not found" });
+  }
+
+  if (orderA.riderId || orderB.riderId) {
+    return res.status(400).json({ message: "One or both orders have already been assigned to another rider" });
+  }
+
+  const batchId = `BATCH-${orderA._id.toString().slice(-4)}-${orderB._id.toString().slice(-4)}`;
+  const riderDisplay = riderName || user.name || `Rider ${user._id.toString().slice(-4).toUpperCase()}`;
+  const riderContact = riderPhone || user.phone || 9876543210;
+
+  // Assign Order A
+  orderA.riderId = user._id.toString();
+  orderA.riderName = riderDisplay;
+  orderA.riderPhone = riderContact;
+  orderA.status = "rider_assigned";
+  orderA.isBatched = true;
+  orderA.batchedWith = orderB._id.toString();
+  orderA.batchId = batchId;
+  orderA.timeline.push({
+    status: "rider_assigned",
+    timestamp: new Date(),
+    note: `Assigned to ${riderDisplay} in an optimized eco-batch delivery route (${batchId}).`,
+  });
+  await orderA.save();
+
+  // Assign Order B
+  orderB.riderId = user._id.toString();
+  orderB.riderName = riderDisplay;
+  orderB.riderPhone = riderContact;
+  orderB.status = "rider_assigned";
+  orderB.isBatched = true;
+  orderB.batchedWith = orderA._id.toString();
+  orderB.batchId = batchId;
+  orderB.timeline.push({
+    status: "rider_assigned",
+    timestamp: new Date(),
+    note: `Assigned to ${riderDisplay} in an optimized eco-batch delivery route (${batchId}).`,
+  });
+  await orderB.save();
+
+  // Recalculate ETAs factoring batching
+  const [etaA, etaB] = await Promise.all([
+    getDetailedETA(orderA),
+    getDetailedETA(orderB),
+  ]);
+
+  // Real-time broadcast
+  if (process.env.REALTIME_SERVICE) {
+    const notifyEvents = [
+      { room: `user:${orderA.userId}`, payload: { ...orderA.toObject(), etaDetails: etaA } },
+      { room: `user:${orderB.userId}`, payload: { ...orderB.toObject(), etaDetails: etaB } },
+      { room: `restaurant:${orderA.restaurantId}`, payload: orderA },
+      { room: `restaurant:${orderB.restaurantId}`, payload: orderB },
+    ];
+
+    for (const item of notifyEvents) {
+      axios.post(
+        `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
+        {
+          event: "order:rider_assigned",
+          room: item.room,
+          payload: item.payload,
+        },
+        { headers: { "x-internal-key": process.env.INTERNAL_SERVICE_KEY } }
+      ).catch((e) => console.warn("Socket notification warning:", e.message));
+    }
+  }
+
+  res.json({
+    success: true,
+    message: "Batched delivery accepted successfully! Both orders assigned to you.",
+    batchId,
+    orders: [orderA, orderB],
   });
 });

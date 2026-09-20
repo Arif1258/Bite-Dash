@@ -129,14 +129,33 @@ const OrderRow = ({ order, onClick }) => {
       onClick={onClick}
     >
       <div className="flex justify-between items-center">
-        <p className="text-sm font-medium">Order #{order._id.slice(-6)}</p>
-        <span className="text-xs capitalize text-gray-500">{order.status}</span>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-semibold text-gray-900">Order #{order._id.slice(-6).toUpperCase()}</p>
+          {order.isBatched && (
+            <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded">
+              📦 Eco-Batch
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {order.dynamicETA && order.status !== "delivered" && (
+            <span className="text-xs bg-red-50 text-[#E23744] font-bold px-2 py-0.5 rounded-full">
+              ⏱️ ~{order.dynamicETA} mins
+            </span>
+          )}
+          <span className="text-xs capitalize font-medium text-gray-600 bg-gray-100 px-2 py-0.5 rounded-full">
+            {order.status.replace(/_/g, " ")}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-2 text-sm text-gray-600">
-        {order.items.map((item, i) => (
+      <div className="mt-2 text-xs text-gray-600">
+        {order.restaurantName && (
+          <p className="font-semibold text-gray-800 mb-0.5">{order.restaurantName}</p>
+        )}
+        {(order.items || []).map((item, i) => (
           <span key={i}>
-            {item.name} x {item.quauntity}
+            {item.name} × {item.quauntity}
             {i < order.items.length - 1 && ", "}
           </span>
         ))}

@@ -9,6 +9,7 @@ import {
   fetchSingleOrder,
   savePaymentReference,
   confirmRazorpayPayment,
+  confirmStripePayment,
   getCurrentOrderForRider,
   getMyOrders,
   updateOrderStatus,
@@ -31,6 +32,7 @@ router.get(
 
 router.put("/payment/reference", savePaymentReference);
 router.put("/payment/confirm", confirmRazorpayPayment);
+router.put("/payment/confirm-stripe", confirmStripePayment);
 
 // Seller: get orders for their restaurant
 router.get(

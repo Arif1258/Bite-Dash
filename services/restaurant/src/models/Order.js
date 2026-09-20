@@ -106,6 +106,19 @@ const OrderSchema = new Schema(
       default: [],
     },
 
+    isBatched: {
+      type: Boolean,
+      default: false,
+    },
+    batchedWith: {
+      type: String,
+      default: null,
+    },
+    batchId: {
+      type: String,
+      default: null,
+    },
+
     timeline: [
       {
         status: { type: String, required: true },

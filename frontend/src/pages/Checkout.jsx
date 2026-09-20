@@ -18,6 +18,7 @@ const Checkout = () => {
 
   const [loadingRazorpay, setLoadingRazorpay] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
+  const [loadingCOD, setLoadingCOD] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
 
   useEffect(() => {
@@ -180,6 +181,22 @@ const Checkout = () => {
       setLoadingStripe(false);
     }
   };
+
+  const payWithCOD = async () => {
+    try {
+      setLoadingCOD(true);
+      const order = await createOrder("cod");
+      if (!order) return;
+      toast.success("Order placed successfully with Cash on Delivery 🎉");
+      navigate(`/order/${order.orderId}`);
+    } catch (error) {
+      console.log(error);
+      toast.error("Failed to place Cash on Delivery order");
+    } finally {
+      setLoadingCOD(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 space-y-6">
       <h1 className="text-2xl font-bold">Checkout</h1>
@@ -272,6 +289,19 @@ const Checkout = () => {
         <h3 className="font-semibold">Payment Method</h3>
 
         <button
+          disabled={!selectedAddressId || loadingCOD || creatingOrder}
+          onClick={payWithCOD}
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#E23744] py-3 text-sm font-semibold text-white hover:bg-red-600 disabled:opacity-50"
+        >
+          {loadingCOD ? (
+            <BiLoader size={18} className="animate-spin" />
+          ) : (
+            <span>💵</span>
+          )}
+          Cash on Delivery (Pay at Doorstep)
+        </button>
+
+        <button
           disabled={!selectedAddressId || loadingRazorpay || creatingOrder}
           onClick={payWithRazorpay}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#2D7FF9] py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-50"
@@ -289,7 +319,7 @@ const Checkout = () => {
           onClick={payWithStripe}
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-black py-3 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50"
         >
-          {loadingRazorpay ? (
+          {loadingStripe ? (
             <BiLoader size={18} className="animate-spin" />
           ) : (
             <BiCreditCard size={18} />

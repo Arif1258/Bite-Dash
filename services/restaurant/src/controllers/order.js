@@ -404,7 +404,19 @@ export const getMyOrders = TryCatch(async (req, res) => {
     $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   }).sort({ createdAt: -1 });
 
-  res.json({ orders });
+  const ordersWithETA = await Promise.all(
+    orders.map(async (order) => {
+      const orderObj = order.toObject();
+      if (order.status !== "delivered" && order.status !== "cancelled") {
+        const eta = await getDetailedETA(order);
+        orderObj.dynamicETA = eta.totalETA;
+        orderObj.etaDetails = eta;
+      }
+      return orderObj;
+    })
+  );
+
+  res.json({ orders: ordersWithETA });
 });
 
 import { calculateOrderETA, getDetailedETA } from "../services/etaService.js";
@@ -696,3 +708,36 @@ export const updateOrderStatusRider = TryCatch(async (req, res) => {
     });
   }
 });
+
+export const confirmStripePayment = TryCatch(async (req, res) => {
+  if (req.headers["x-internal-key"] !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  const { orderId, paymentId } = req.body;
+  if (!orderId) {
+    return res.status(400).json({ message: "OrderId is required" });
+  }
+
+  const order = await Order.findOneAndUpdate(
+    { _id: orderId },
+    { $set: { paymentStatus: "paid", paymentId: paymentId || "stripe_confirmed" } },
+    { new: true }
+  );
+
+  if (!order) return res.status(404).json({ message: "Order not found" });
+
+  try {
+    const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
+    await publishOrderLifecycleEvent("ORDER_PAID", {
+      orderId: order._id.toString(),
+      restaurantId: order.restaurantId,
+      userId: order.userId,
+    });
+  } catch (pubErr) {
+    console.warn("Order paid publish warning:", pubErr.message);
+  }
+
+  return res.json({ success: true, order });
+});
+

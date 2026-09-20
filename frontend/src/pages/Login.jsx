@@ -55,7 +55,11 @@ const Login = () => {
       setUser(data.user);
       setIsAuth(true);
       toast.success(data.message);
-      navigate("/");
+      if (!data.user.role) {
+        navigate("/select-role");
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || (error.code === "ECONNABORTED" ? "The authentication service took too long to respond" : "Unable to reach the authentication service"));
     } finally {
@@ -65,7 +69,7 @@ const Login = () => {
   return (
     <div className="flex min-h-screen items-center justify-center bg-white px-4">
       <div className="w-full max-w-sm space-y-6">
-        <h1 className="text-center text-3xl font-bold text-[#E23774]">
+        <h1 className="text-center text-3xl font-bold text-[#E23744]">
           BiteDash
         </h1>
 
@@ -75,17 +79,17 @@ const Login = () => {
           {mode === "signup" && <input required minLength="2" maxLength="100" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Name" className="w-full rounded-xl border border-gray-300 px-4 py-3" />}
           <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" className="w-full rounded-xl border border-gray-300 px-4 py-3" />
           <input required type="password" minLength="8" maxLength="128" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="Password (8+ characters)" className="w-full rounded-xl border border-gray-300 px-4 py-3" />
-          <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#E23774] px-4 py-3 font-medium text-white disabled:opacity-60">{loading ? "Please wait..." : mode === "signup" ? "Create account" : "Log in"}</button>
+          <button type="submit" disabled={loading} className="w-full rounded-xl bg-[#E23744] hover:bg-red-600 px-4 py-3 font-medium text-white disabled:opacity-60 transition">{loading ? "Please wait..." : mode === "signup" ? "Create account" : "Log in"}</button>
         </form>
 
-        <button type="button" disabled={loading} onClick={() => setMode(mode === "signup" ? "login" : "signup")} className="w-full text-sm text-[#E23774]">{mode === "signup" ? "Already have an account? Log in" : "New to BiteDash? Create an account"}</button>
+        <button type="button" disabled={loading} onClick={() => setMode(mode === "signup" ? "login" : "signup")} className="w-full text-sm text-[#E23744] font-medium">{mode === "signup" ? "Already have an account? Log in" : "New to BiteDash? Create an account"}</button>
 
         <div className="flex items-center gap-3 text-xs text-gray-400"><span className="h-px flex-1 bg-gray-200" />or continue with<span className="h-px flex-1 bg-gray-200" /></div>
 
         <button
           onClick={googleLogin}
           disabled={loading}
-          className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3"
+          className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-300 bg-white px-4 py-3 hover:bg-gray-50 transition"
         >
           <FcGoogle size={20} />
           {loading ? "Signing in ..." : "Continue with Google"}
@@ -93,8 +97,8 @@ const Login = () => {
 
         <p className="text-center text-xs text-gray-400">
           By continuing, you agree with our{" "}
-          <span className="text-[#E23774]">Terms of Service</span> &{" "}
-          <span className="text-[#E23774]">Privacy Policy</span>
+          <span className="text-[#E23744]">Terms of Service</span> &{" "}
+          <span className="text-[#E23744]">Privacy Policy</span>
         </p>
       </div>
     </div>

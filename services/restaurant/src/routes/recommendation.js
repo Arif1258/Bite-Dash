@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuth } from "../middlewares/isAuth.js";
+import { isAuth, optionalAuth } from "../middlewares/isAuth.js";
 import {
   getRecommendations,
   trackSearchPreference,
@@ -7,7 +7,7 @@ import {
 
 const router = express.Router();
 
-router.get("/get", isAuth, getRecommendations);
+router.get("/get", optionalAuth, getRecommendations);
 router.post("/track", isAuth, trackSearchPreference);
 
 export default router;

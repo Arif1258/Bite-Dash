@@ -61,6 +61,9 @@ const RestaurantSurplus = ({ restaurantId }) => {
         }
       );
       toast.success(data.message);
+      if (data.notifiedNearbyCustomersCount > 0) {
+        toast.success(`📢 ${data.notifiedNearbyCustomersCount} customer(s) within 5 km notified!`, { icon: "📍" });
+      }
       setName("");
       setDescription("");
       setOriginalPrice("");

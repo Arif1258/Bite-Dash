@@ -50,3 +50,22 @@ export const isSeller = async (req, res, next) => {
 
   next();
 };
+
+export const optionalAuth = async (req, _res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split(" ")[1];
+      if (token) {
+        const decodedValue = jwt.verify(token, process.env.JWT_SEC);
+        if (decodedValue && decodedValue.user) {
+          req.user = decodedValue.user;
+        }
+      }
+    }
+  } catch {
+    // Continue as guest
+  }
+  next();
+};
+

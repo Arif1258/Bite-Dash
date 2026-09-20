@@ -19,6 +19,7 @@ import Orders from "./pages/Orders";
 import OrderPage from "./pages/OrderPage";
 import RiderDashboard from "./pages/RiderDashboard";
 import Admin from "./pages/Admin";
+import AISupportChat from "./components/AISupportChat";
 
 const App = () => {
   const { user, loading } = useAppData();
@@ -67,6 +68,7 @@ const App = () => {
             <Route path="/account" element={<Account />} />
           </Route>
         </Routes>
+        <AISupportChat isFloating={true} />
         <Footer />
       </BrowserRouter>
     </>

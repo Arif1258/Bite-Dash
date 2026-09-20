@@ -29,6 +29,11 @@ const SurplusInventorySchema = new Schema(
       type: Date,
       required: true,
     },
+    status: {
+      type: String,
+      enum: ["active", "sold_out", "expired", "removed"],
+      default: "active",
+    },
   },
   {
     timestamps: true,
