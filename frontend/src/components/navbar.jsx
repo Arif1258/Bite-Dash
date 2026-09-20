@@ -34,7 +34,22 @@ const Navbar = () => {
           BiteDash
         </Link>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <a
+            href="#surplus-section"
+            onClick={(e) => {
+              if (currLocation.pathname === "/") {
+                e.preventDefault();
+                document.getElementById("surplus-section")?.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 text-xs font-bold transition shadow-xs cursor-pointer"
+            title="Surplus Food & Waste Reduction Deals"
+          >
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            🌱 <span className="hidden sm:inline">Surplus Deals</span><span className="sm:hidden">Deals</span>
+          </a>
+
           <Link to={"/cart"} className="relative">
             <CgShoppingCart className="h-6 w-6 text-[#E23744]" />
             <span className="absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#E23744] text-xs font-semibold text-white">

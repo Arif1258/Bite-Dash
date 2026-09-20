@@ -167,17 +167,35 @@ export const getSurplusItems = TryCatch(async (req, res) => {
       isOpen: true,
     }).lean();
 
-    query.restaurantId = { $in: nearbyRestaurants.map((r) => r._id) };
+    if (nearbyRestaurants.length > 0) {
+      query.restaurantId = { $in: nearbyRestaurants.map((r) => r._id) };
+    } else {
+      // Fallback: broaden to all open restaurants so users can still discover surplus items
+      const openRestaurants = await Restaurant.find({ isOpen: true }).lean();
+      query.restaurantId = { $in: openRestaurants.map((r) => r._id) };
+    }
   } else {
     // Fallback: all open restaurants
     const openRestaurants = await Restaurant.find({ isOpen: true }).lean();
     query.restaurantId = { $in: openRestaurants.map((r) => r._id) };
   }
 
-  const surplusItems = await SurplusInventory.find(query)
+  let surplusItems = await SurplusInventory.find(query)
     .populate("restaurantId", "name image autoLocation formattedAddress phone")
     .sort({ expiresAt: 1 }) // Expiring soonest displayed first
     .lean();
+
+  // If geo-filtered query returned 0 items, broaden search so customer still sees active deals
+  if (surplusItems.length === 0 && !restaurantId) {
+    surplusItems = await SurplusInventory.find({
+      quantity: { $gt: 0 },
+      expiresAt: { $gt: now },
+      status: "active",
+    })
+      .populate("restaurantId", "name image autoLocation formattedAddress phone")
+      .sort({ expiresAt: 1 })
+      .lean();
+  }
 
   res.json({
     success: true,

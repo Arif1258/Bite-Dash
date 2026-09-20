@@ -143,25 +143,68 @@ const SurplusSection = () => {
     }
   };
 
-  if (loading || items.length === 0) return null;
+  if (loading) {
+    return (
+      <div id="surplus-section" className="rounded-2xl bg-green-50/70 border border-green-200 p-5 shadow-sm space-y-3 my-6 animate-pulse">
+        <div className="flex items-center justify-between">
+          <div className="h-5 bg-green-200 rounded w-64"></div>
+          <div className="h-5 bg-green-200 rounded w-24"></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+          <div className="h-32 bg-white/70 rounded-xl border border-green-100"></div>
+          <div className="h-32 bg-white/70 rounded-xl border border-green-100 hidden sm:block"></div>
+          <div className="h-32 bg-white/70 rounded-xl border border-green-100 hidden md:block"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="rounded-2xl bg-green-50 border border-green-100 p-5 shadow-sm space-y-4 my-6">
-      <div className="flex items-center justify-between">
+    <div id="surplus-section" className="rounded-2xl bg-gradient-to-r from-green-50 via-emerald-50 to-green-50 border border-green-200 p-5 shadow-sm space-y-4 my-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-green-200/60 pb-3">
         <div>
-          <h2 className="text-lg font-extrabold text-green-900 flex items-center gap-1.5">
-            🌱 Save the Food: Surplus Meals Proximity Discount
+          <h2 className="text-lg font-black text-green-950 flex items-center gap-2">
+            <span className="p-1 bg-green-600 text-white rounded-lg text-xs">🌱</span>
+            Save the Food: Surplus Meals Proximity Discount
           </h2>
-          <p className="text-xs text-green-700 font-medium">
-            Delicious freshly prepared meals nearing selling window. Save food waste, buy cheaper!
+          <p className="text-xs text-green-800 font-medium mt-0.5">
+            Freshly prepared restaurant meals nearing service window. Save up to 70% and reduce food waste!
           </p>
         </div>
-        <span className="bg-green-600 text-white text-[10px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider">
-          Nearby Deals
-        </span>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="inline-flex items-center gap-1.5 bg-emerald-600 text-white text-[11px] px-3 py-1 rounded-full font-bold uppercase tracking-wider shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+            5 km Radar Active
+          </span>
+          <button
+            onClick={fetchSurplus}
+            className="text-[11px] bg-white border border-green-300 text-green-800 font-bold px-2.5 py-1 rounded-full hover:bg-green-100 transition"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
+      {items.length === 0 ? (
+        <div className="rounded-xl bg-white/90 border border-dashed border-green-300 p-6 text-center space-y-2">
+          <div className="w-12 h-12 rounded-full bg-green-100 text-green-700 flex items-center justify-center mx-auto text-xl font-bold">
+            🌱
+          </div>
+          <h3 className="font-bold text-gray-800 text-sm">No Active Surplus Meals Right Now</h3>
+          <p className="text-xs text-gray-500 max-w-md mx-auto">
+            Restaurants in your 5 km radius typically post freshly cooked surplus meals during afternoon and late evening closing hours at up to 70% off. You will receive an instant alert when deals drop!
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <button
+              onClick={fetchSurplus}
+              className="text-xs bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2 rounded-lg transition shadow-xs"
+            >
+              Scan Nearby Now
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {items.map((item) => {
           const isExpired = new Date(item.expiresAt) - now <= 0;
           if (isExpired) return null;
@@ -212,6 +255,7 @@ const SurplusSection = () => {
           );
         })}
       </div>
+      )}
 
       {/* Claim & Instant Checkout Modal */}
       {claimingItem && (
