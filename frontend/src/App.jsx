@@ -21,6 +21,7 @@ import RiderDashboard from "./pages/RiderDashboard";
 import Admin from "./pages/Admin";
 import AISupportChat from "./components/AISupportChat";
 import SurplusDeals from "./pages/SurplusDeals";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const App = () => {
   const { user, loading } = useAppData();
@@ -40,49 +41,154 @@ const App = () => {
   }
 
   if (user && user.role === "seller") {
-    return <Restaurant />;
+    return (
+      <ErrorBoundary title="Restaurant Portal Error" message="Unable to load the restaurant partner portal. Please retry.">
+        <Restaurant />
+      </ErrorBoundary>
+    );
   }
   if (user && user.role === "rider") {
-    return <RiderDashboard />;
+    return (
+      <ErrorBoundary title="Delivery Partner Error" message="Unable to load the delivery partner dashboard. Please retry.">
+        <RiderDashboard />
+      </ErrorBoundary>
+    );
   }
   if (user && user.role === "admin") {
-    return <Admin />;
+    return (
+      <ErrorBoundary title="Admin Console Error" message="Unable to load admin console. Please retry.">
+        <Admin />
+      </ErrorBoundary>
+    );
   }
 
   return (
-    <BrowserRouter>
-      <div className="min-h-screen flex flex-col bg-slate-50/50">
-        <Navbar />
-        <div className="flex-1">
-          <Routes>
-            {/* Public Auth */}
-            <Route element={<PublicRoute />}>
-              <Route path="/login" element={<Login />} />
-            </Route>
+    <ErrorBoundary title="Application Error" message="An unexpected error occurred in the application.">
+      <BrowserRouter>
+        <div className="min-h-screen flex flex-col bg-slate-50/50">
+          <Navbar />
+          <div className="flex-1">
+            <Routes>
+              {/* Public Auth */}
+              <Route element={<PublicRoute />}>
+                <Route
+                  path="/login"
+                  element={
+                    <ErrorBoundary title="Sign In Error">
+                      <Login />
+                    </ErrorBoundary>
+                  }
+                />
+              </Route>
 
-            {/* Public Discovery Routes (Guests can browse freely) */}
-            <Route path="/" element={<Home />} />
-            <Route path="/surplus-deals" element={<SurplusDeals />} />
-            <Route path="/restaurant/:id" element={<RestaurantPage />} />
-            <Route path="/cart" element={<Cart />} />
+              {/* Public Discovery Routes (Guests can browse freely) */}
+              <Route
+                path="/"
+                element={
+                  <ErrorBoundary title="Home Page Error">
+                    <Home />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/surplus-deals"
+                element={
+                  <ErrorBoundary title="Surplus Deals Error">
+                    <SurplusDeals />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/restaurant/:id"
+                element={
+                  <ErrorBoundary title="Restaurant Menu Error" message="Unable to display restaurant menu. Please retry.">
+                    <RestaurantPage />
+                  </ErrorBoundary>
+                }
+              />
+              <Route
+                path="/cart"
+                element={
+                  <ErrorBoundary title="Unable to load your cart" message="We encountered an unexpected error loading your cart.">
+                    <Cart />
+                  </ErrorBoundary>
+                }
+              />
 
-            {/* Protected Routes (Checkout, Orders, Account require login) */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/checkout" element={<Checkout />} />
-              <Route path="/orders" element={<Orders />} />
-              <Route path="/order/:id" element={<OrderPage />} />
-              <Route path="/ordersuccess" element={<OrderSuccess />} />
-              <Route path="/paymentsuccess/:paymentId" element={<PaymentSuccess />} />
-              <Route path="/address" element={<AddAddressPage />} />
-              <Route path="/select-role" element={<SelectRole />} />
-              <Route path="/account" element={<Account />} />
-            </Route>
-          </Routes>
+              {/* Protected Routes (Checkout, Orders, Account require login) */}
+              <Route element={<ProtectedRoute />}>
+                <Route
+                  path="/checkout"
+                  element={
+                    <ErrorBoundary title="Checkout Error" message="Unable to load checkout details. Please retry.">
+                      <Checkout />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/orders"
+                  element={
+                    <ErrorBoundary title="Orders History Error">
+                      <Orders />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/order/:id"
+                  element={
+                    <ErrorBoundary title="Order Tracking Error" message="Unable to load order status. Please retry.">
+                      <OrderPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/ordersuccess"
+                  element={
+                    <ErrorBoundary title="Order Success Error">
+                      <OrderSuccess />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/paymentsuccess/:paymentId"
+                  element={
+                    <ErrorBoundary title="Payment Status Error">
+                      <PaymentSuccess />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/address"
+                  element={
+                    <ErrorBoundary title="Address Management Error">
+                      <AddAddressPage />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/select-role"
+                  element={
+                    <ErrorBoundary title="Role Selection Error">
+                      <SelectRole />
+                    </ErrorBoundary>
+                  }
+                />
+                <Route
+                  path="/account"
+                  element={
+                    <ErrorBoundary title="Account Profile Error">
+                      <Account />
+                    </ErrorBoundary>
+                  }
+                />
+              </Route>
+            </Routes>
+          </div>
+          <AISupportChat isFloating={true} />
+          <Footer />
         </div>
-        <AISupportChat isFloating={true} />
-        <Footer />
-      </div>
-    </BrowserRouter>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 };
 

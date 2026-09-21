@@ -246,12 +246,16 @@ const Navbar = () => {
                   <span className="text-red-600">₹{subTotal}</span>
                 </div>
                 <div className="py-2.5 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
-                  {cart.map((c) => (
-                    <div key={c._id} className="flex justify-between items-center text-xs text-slate-600">
-                      <span className="truncate max-w-[170px] font-medium">{c.item?.name} × {c.quauntity}</span>
-                      <span className="font-bold text-slate-900">₹{(c.item?.price || 0) * c.quauntity}</span>
-                    </div>
-                  ))}
+                  {cart.map((c) => {
+                    const item = c.itemId || c.item;
+                    if (!item) return null;
+                    return (
+                      <div key={c._id} className="flex justify-between items-center text-xs text-slate-600">
+                        <span className="truncate max-w-[170px] font-medium">{item.name} × {c.quauntity}</span>
+                        <span className="font-bold text-slate-900">₹{(item.price || 0) * c.quauntity}</span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <Link
                   to="/cart"

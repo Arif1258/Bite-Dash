@@ -11,7 +11,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 
 const Checkout = () => {
-  const { cart, subTotal, quauntity } = useAppData();
+  const { cart, subTotal, quauntity, fetchCart } = useAppData();
   const navigate = useNavigate();
 
   const [addresses, setAddresses] = useState([]);
@@ -69,8 +69,13 @@ const Checkout = () => {
     );
   }
 
-  const restaurant = cart[0].restaurantId;
-  const restaurantName = cart[0].item?.restaurantName || "Partner Restaurant";
+  const firstItem = cart[0];
+  const restaurant = firstItem?.restaurantId?._id || firstItem?.restaurantId;
+  const restaurantName =
+    firstItem?.restaurantId?.name ||
+    firstItem?.itemId?.restaurantName ||
+    firstItem?.item?.restaurantName ||
+    "Partner Restaurant";
   const deliveryFee = subTotal < 250 ? 49 : 0;
   const platformFee = 7;
   const grandTotal = subTotal + deliveryFee + platformFee;
@@ -179,6 +184,7 @@ const Checkout = () => {
       setLoadingCOD(true);
       const order = await createOrder("cod");
       if (!order) return;
+      await fetchCart();
       toast.success("Order placed successfully with Cash on Delivery 🎉");
       navigate(`/order/${order.orderId}`);
     } catch (error) {
@@ -390,16 +396,20 @@ const Checkout = () => {
 
               {/* Items List */}
               <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                {cart.map((c) => (
-                  <div key={c._id} className="flex justify-between items-center text-xs">
-                    <span className="text-slate-700 font-medium truncate max-w-[200px]">
-                      {c.item?.name} × {c.quauntity}
-                    </span>
-                    <span className="font-bold text-slate-900">
-                      ₹{(c.item?.price || 0) * c.quauntity}
-                    </span>
-                  </div>
-                ))}
+                {cart.map((c) => {
+                  const item = c.itemId || c.item;
+                  if (!item) return null;
+                  return (
+                    <div key={c._id} className="flex justify-between items-center text-xs">
+                      <span className="text-slate-700 font-medium truncate max-w-[200px]">
+                        {item.name} × {c.quauntity}
+                      </span>
+                      <span className="font-bold text-slate-900">
+                        ₹{(item.price || 0) * c.quauntity}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Pricing Breakdown */}

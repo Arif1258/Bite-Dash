@@ -41,10 +41,14 @@ export const AppProvider = ({ children }) => {
   const [cart, setCart] = useState([]);
   const [subTotal, setSubTotal] = useState(0);
   const [quauntity, setQuauntity] = useState(0);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [cartError, setCartError] = useState(null);
 
   async function fetchCart() {
     if (!user || user.role !== "customer") return;
     try {
+      setCartLoading(true);
+      setCartError(null);
       const { data } = await axios.get(`${restaurantService}/api/cart/all`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -53,9 +57,12 @@ export const AppProvider = ({ children }) => {
 
       setCart(data.cart || []);
       setSubTotal(data.subtotal || 0);
-      setQuauntity(data.cartLength);
+      setQuauntity(data.cartLength || 0);
     } catch (error) {
-      console.log(error);
+      console.log("Cart fetch error:", error);
+      setCartError(error.response?.data?.message || "Failed to load cart");
+    } finally {
+      setCartLoading(false);
     }
   }
 
@@ -70,8 +77,15 @@ export const AppProvider = ({ children }) => {
   }, [user]);
 
   useEffect(() => {
-    if (!navigator.geolocation)
-      return alert("Please Allow Location to continue");
+    if (!navigator.geolocation) {
+      setLocation({
+        latitude: 19.076,
+        longitude: 72.8777,
+        formattedAddress: "Mumbai, Maharashtra, India",
+      });
+      setCity("Mumbai");
+      return;
+    }
     setLoadingLocation(true);
 
     navigator.geolocation.getCurrentPosition(
@@ -87,13 +101,13 @@ export const AppProvider = ({ children }) => {
           setLocation({
             latitude,
             longitude,
-            formattedAddress: data.display_name || "current location",
+            formattedAddress: data.display_name || "Current Location",
           });
 
           setCity(
-            data.address.city ||
-              data.address.town ||
-              data.address.village ||
+            data.address?.city ||
+              data.address?.town ||
+              data.address?.village ||
               "Your Location",
           );
           setLoadingLocation(false);
@@ -103,7 +117,7 @@ export const AppProvider = ({ children }) => {
             longitude,
             formattedAddress: "Current Location",
           });
-          setCity("Failed to load");
+          setCity("Your Location");
           setLoadingLocation(false);
         }
       },
@@ -136,7 +150,10 @@ export const AppProvider = ({ children }) => {
         loadingLocation,
         city,
         cart,
+        setCart,
         fetchCart,
+        cartLoading,
+        cartError,
         quauntity,
         subTotal,
       }}

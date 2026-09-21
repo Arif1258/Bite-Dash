@@ -10,9 +10,10 @@ import { useAppData } from "../context/AppContext";
 
 const MenuItems = ({ items, onItemDeleted, isSeller }) => {
   const [loadingItemId, setLoadingItemId] = useState(null);
+  const { fetchCart } = useAppData();
 
   const handleDelete = async (itemId) => {
-    const confirm = window.confirm("Are you sure you want to delete this item");
+    const confirm = window.confirm("Are you sure you want to delete this item?");
     if (!confirm) return;
 
     try {
@@ -22,11 +23,11 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
         },
       });
 
-      toast.success("Item deleted");
-      onItemDeleted();
+      toast.success("Item deleted successfully");
+      if (onItemDeleted) onItemDeleted();
     } catch (error) {
       console.log(error);
-      toast.error("Failed to delete item");
+      toast.error(error.response?.data?.message || "Failed to delete item");
     }
   };
 
@@ -42,15 +43,13 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
         },
       );
 
-      toast.success(data.message);
-      onItemDeleted();
+      toast.success(data.message || "Item availability updated");
+      if (onItemDeleted) onItemDeleted();
     } catch (error) {
       console.log(error);
-      toast.error("Failed to update status");
+      toast.error(error.response?.data?.message || "Failed to update status");
     }
   };
-
-  const { fetchCart } = useAppData();
 
   const addToCart = async (restaurantId, itemId) => {
     try {
@@ -69,73 +68,91 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
         },
       );
 
-      toast.success(data.message);
-      fetchCart();
+      toast.success(data.message || "Item added to cart");
+      await fetchCart();
     } catch (error) {
-      toast.error(error.response.data.message);
+      const errMsg = error.response?.data?.message || "Failed to add item to cart";
+      toast.error(errMsg);
     } finally {
       setLoadingItemId(null);
     }
   };
+
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (safeItems.length === 0) {
+    return (
+      <div className="py-8 text-center text-xs text-slate-400 font-medium">
+        No menu items available at the moment.
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-      {items.map((item) => {
+      {safeItems.map((item) => {
         const isLoading = loadingItemId === item._id;
+        const itemImg = item.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200";
 
         return (
           <div
-            className={`relative flex gap-4 rounded-lg bg-white p-4 shadow-sm transition ${
-              !item.isAvailable ? "opacity-70" : ""
+            className={`relative flex gap-4 rounded-2xl bg-white p-4 shadow-2xs border border-slate-100 hover:shadow-xs transition ${
+              !item.isAvailable ? "opacity-75" : ""
             }`}
             key={item._id}
           >
             <div className="relative shrink-0">
               <img
-                src={item.image}
-                alt=""
-                className={`h-20 w-20 rounded object-cover ${
+                src={itemImg}
+                alt={item.name || "Food item"}
+                className={`h-20 w-20 rounded-xl object-cover border border-slate-100 ${
                   !item.isAvailable ? "grayscale brightness-75" : ""
                 }`}
+                onError={(e) => {
+                  e.target.src = "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200";
+                }}
               />
 
               {!item.isAvailable && (
-                <span className="absolute inset-0 flex items-center justify-center rounded bg-black/60 text-xs font-semibold text-white">
-                  Not Available
+                <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/60 text-[10px] font-bold text-white uppercase tracking-wider">
+                  Sold Out
                 </span>
               )}
             </div>
 
-            <div className="flex flex-1 flex-col justify-between">
+            <div className="flex flex-1 flex-col justify-between min-w-0">
               <div>
-                <h3 className="font-semibold">{item.name}</h3>
+                <h3 className="font-bold text-xs sm:text-sm text-slate-900 truncate">{item.name}</h3>
                 {item.description && (
-                  <p className="text-sm text-gray-500 line-clamp-2">
+                  <p className="text-[11px] text-slate-500 line-clamp-2 mt-0.5">
                     {item.description}
                   </p>
                 )}
               </div>
 
-              <div className="flex items-center justify-between ">
-                <p className="font-medium">₹{item.price}</p>
+              <div className="flex items-center justify-between pt-2">
+                <p className="font-black text-sm text-slate-900">₹{item.price}</p>
 
                 {isSeller && (
-                  <div className="flex gap-2">
+                  <div className="flex gap-1.5">
                     <button
                       onClick={() => toggleAvailiblity(item._id)}
-                      className="rounded-lg p-2 text-gray-600 hover:bg-gray-100"
+                      title={item.isAvailable ? "Mark Unavailable" : "Mark Available"}
+                      className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer transition"
                     >
                       {item.isAvailable ? (
-                        <BsEye size={18} />
+                        <BsEye size={16} />
                       ) : (
-                        <FiEyeOff size={18} />
+                        <FiEyeOff size={16} />
                       )}
                     </button>
 
                     <button
                       onClick={() => handleDelete(item._id)}
-                      className="rounded-lg p-2 text-red-500 hover:bg-red-50"
+                      title="Delete Item"
+                      className="rounded-lg p-1.5 text-red-500 hover:bg-red-50 cursor-pointer transition"
                     >
-                      <BiTrash size={18} />
+                      <BiTrash size={16} />
                     </button>
                   </div>
                 )}
@@ -144,16 +161,17 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
                   <button
                     disabled={!item.isAvailable || isLoading}
                     onClick={() => addToCart(item.restaurantId, item._id)}
-                    className={`flex items-center justify-center rounded-lg p-2 ${
+                    title={item.isAvailable ? "Add to Cart" : "Item Sold Out"}
+                    className={`flex items-center justify-center rounded-xl p-2 font-bold transition cursor-pointer ${
                       !item.isAvailable || isLoading
-                        ? "cursor-not-allowed text-gray-400"
-                        : "text-red-500 hover:bg-red-50"
+                        ? "cursor-not-allowed text-slate-300 bg-slate-50"
+                        : "text-white bg-red-600 hover:bg-red-700 shadow-sm shadow-red-600/20"
                     }`}
                   >
                     {isLoading ? (
-                      <VscLoading size={18} className="animate-spin" />
+                      <VscLoading size={16} className="animate-spin" />
                     ) : (
-                      <BsCartPlus size={18} />
+                      <BsCartPlus size={16} />
                     )}
                   </button>
                 )}
