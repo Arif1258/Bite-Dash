@@ -6,6 +6,7 @@
     }
   ],
   "env": {
+    "VITE_GOOGLE_CLIENT_ID": "1039539417875-uc849kq802a07j15hs454pqprlgr8dbn.apps.googleusercontent.com",
     "VITE_STRIPE_PUBLISHABLE_KEY": "pk_test_your_stripe_publishable_key",
     "VITE_INTERNAL_SERVICE_KEY": "jdfienf12345@@@@##4$$$%%%jsadfjlajdf",
     "VITE_AUTH_SERVICE": "https://bitedash-auth.vercel.app",
