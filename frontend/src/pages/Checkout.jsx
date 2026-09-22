@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAppData } from "../context/AppContext";
 import axios from "axios";
 import { restaurantService, utilsService } from "../main";
@@ -11,7 +11,7 @@ import {
 import { loadStripe } from "@stripe/stripe-js";
 
 const Checkout = () => {
-  const { cart, subTotal, quauntity, fetchCart } = useAppData();
+  const { cart, subTotal, quauntity, fetchCart, cartLoading, loading } = useAppData();
   const navigate = useNavigate();
 
   const [addresses, setAddresses] = useState([]);
@@ -23,6 +23,7 @@ const Checkout = () => {
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [loadingCOD, setLoadingCOD] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   useEffect(() => {
     const fetchAddresses = async () => {
@@ -56,6 +57,26 @@ const Checkout = () => {
     fetchAddresses();
   }, [cart]);
 
+  // Loading skeleton during auth/cart hydration to prevent false "Cart is empty" flash
+  if ((loading || cartLoading) && (!cart || cart.length === 0)) {
+    return (
+      <div className="min-h-[70vh] bg-slate-50/60 py-10 px-4 sm:px-6">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="h-8 w-48 bg-slate-200 rounded-xl animate-pulse"></div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 space-y-4">
+              <div className="h-36 bg-white rounded-3xl border border-slate-200 animate-pulse"></div>
+              <div className="h-44 bg-white rounded-3xl border border-slate-200 animate-pulse"></div>
+            </div>
+            <div className="lg:col-span-5">
+              <div className="h-72 bg-white rounded-3xl border border-slate-200 animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!cart || cart.length === 0) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-slate-50 px-4">
@@ -81,11 +102,13 @@ const Checkout = () => {
   const grandTotal = subTotal + deliveryFee + platformFee;
 
   const createOrder = async (paymentMethod) => {
+    if (isSubmittingRef.current) return null;
     if (!selectedAddressId) {
       toast.error("Please select a delivery address");
       return null;
     }
 
+    isSubmittingRef.current = true;
     setCreatingOrder(true);
     try {
       const { data } = await axios.post(
@@ -107,6 +130,7 @@ const Checkout = () => {
       return null;
     } finally {
       setCreatingOrder(false);
+      isSubmittingRef.current = false;
     }
   };
 

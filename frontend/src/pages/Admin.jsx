@@ -71,19 +71,36 @@ const Admin = () => {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user?.role === "admin") {
+      fetchData();
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (tab === "batching") {
+    if (user?.role === "admin" && tab === "batching") {
       fetchBatchMetrics();
     }
-  }, [tab]);
+  }, [tab, user]);
 
   const logoutHandler = () => {
     logout();
     toast.success("Logged out successfully");
   };
+
+  if (!user || user.role !== "admin") {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-4">
+        <h1 className="text-2xl font-bold text-red-500 mb-2">Access Denied</h1>
+        <p className="text-slate-400 mb-4">You must have administrative privileges to access this console.</p>
+        <button
+          onClick={logout}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white font-medium transition-colors"
+        >
+          Return to Sign In
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

@@ -1,10 +1,22 @@
 import axios from "axios";
+import mongoose from "mongoose";
 import TryCatch from "../middlewares/trycatch.js";
 import Address from "../models/Address.js";
 import Cart from "../models/Cart.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
+import MenuItem from "../models/MenuItems.js";
 import { publishEvent } from "../config/order.publisher.js";
+
+const getUserIdQuery = (userId) => {
+  if (!userId) return { userId: null };
+  const strId = userId.toString();
+  const or = [{ userId: strId }];
+  if (mongoose.Types.ObjectId.isValid(strId)) {
+    or.push({ userId: new mongoose.Types.ObjectId(strId) });
+  }
+  return { $or: or };
+};
 
 export const createOrder = TryCatch(async (req, res) => {
   const user = req.user;
@@ -49,23 +61,42 @@ export const createOrder = TryCatch(async (req, res) => {
     return +(R * c).toFixed(2);
   };
 
-  const cartItems = await Cart.find({ userId: user._id })
+  const userIdQuery = getUserIdQuery(user._id);
+
+  const cartItems = await Cart.find(userIdQuery)
     .populate("itemId")
     .populate("restaurantId");
 
-  if (cartItems.length === 0) {
+  if (!cartItems || cartItems.length === 0) {
     return res.status(400).json({ message: "Cart is empty" });
+  }
+
+  // Multi-vendor validation: Verify all cart items belong to the same restaurant
+  const restaurantIds = new Set(
+    cartItems
+      .map((c) => {
+        const rest = c.restaurantId;
+        return rest?._id ? rest._id.toString() : rest ? rest.toString() : null;
+      })
+      .filter(Boolean)
+  );
+
+  if (restaurantIds.size > 1) {
+    return res.status(400).json({
+      message:
+        "You can order from only one restaurant at a time. Please clear your cart or remove items from other restaurants.",
+    });
   }
 
   const firstCartItem = cartItems[0];
 
   if (!firstCartItem || !firstCartItem.restaurantId) {
     return res.status(400).json({
-      message: "Invailid Cart Data",
+      message: "Invalid Cart Data",
     });
   }
 
-  const restaurantId = firstCartItem.restaurantId._id;
+  const restaurantId = firstCartItem.restaurantId._id || firstCartItem.restaurantId;
 
   const restaurant = await Restaurant.findById(restaurantId);
 
@@ -76,7 +107,7 @@ export const createOrder = TryCatch(async (req, res) => {
   }
 
   if (!restaurant.isOpen) {
-    return res.status(404).json({
+    return res.status(400).json({
       message: "Sorry this restaurant is closed for now",
     });
   }
@@ -84,30 +115,41 @@ export const createOrder = TryCatch(async (req, res) => {
   const distance = getDistanceKm(
     address.location.coordinates[1],
     address.location.coordinates[0],
-    restaurant.autoLocation.coordinates[1],
-    restaurant.autoLocation.coordinates[0],
+    restaurant.autoLocation?.coordinates?.[1] ?? 19.076,
+    restaurant.autoLocation?.coordinates?.[0] ?? 72.8777,
   );
 
   let subtotal = 0;
+  const orderItems = [];
 
-  const orderItems = cartItems.map((cart) => {
+  // Stock / Availability validation & item calculations
+  for (const cart of cartItems) {
     const item = cart.itemId;
 
     if (!item) {
-      throw new Error("Invalid cart item");
+      return res.status(400).json({
+        message: "One or more items in your cart are no longer available. Please update your cart.",
+      });
     }
 
-    const itemTotal = item.price * cart.quauntity;
+    if (item.isAvailable === false) {
+      return res.status(400).json({
+        message: `"${item.name}" is currently out of stock or unavailable.`,
+      });
+    }
+
+    const qty = cart.quauntity || 1;
+    const itemTotal = (item.price || 0) * qty;
 
     subtotal += itemTotal;
 
-    return {
+    orderItems.push({
       itemId: item._id.toString(),
       name: item.name,
       price: item.price,
-      quauntity: cart.quauntity,
-    };
-  });
+      quauntity: qty,
+    });
+  }
 
   const deliveryFee = subtotal < 250 ? 49 : 0;
   const platfromFee = 7;
@@ -146,13 +188,17 @@ export const createOrder = TryCatch(async (req, res) => {
       {
         status: "placed",
         timestamp: new Date(),
-        note: "Order created successfully. Awaiting payment confirmation.",
+        note:
+          paymentMethod === "cod"
+            ? "Order placed successfully with Cash on Delivery. Payment will be collected upon arrival."
+            : "Order created successfully. Awaiting payment confirmation.",
       },
     ],
     expiresAt,
   });
 
-  await Cart.deleteMany({ userId: user._id });
+  // Clear cart only after successful order creation
+  await Cart.deleteMany(userIdQuery);
 
   // Publish event asynchronously
   try {

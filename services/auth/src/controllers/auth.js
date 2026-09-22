@@ -28,12 +28,14 @@ const normalizeRole = (role) => {
   if (r === "restaurant" || r === "seller") return "seller";
   if (r === "rider") return "rider";
   if (r === "customer") return "customer";
+  if (r === "admin") return "admin";
   return null;
 };
 
 const getRoleDisplayName = (r) => {
   if (r === "seller" || r === "restaurant") return "Restaurant";
   if (r === "rider") return "Rider";
+  if (r === "admin") return "Admin";
   return "Customer";
 };
 
@@ -43,6 +45,11 @@ export const signupUser = TryCatch(async (req, res) => {
   if (await User.exists({ email: credentials.email })) return res.status(409).json({ message: "An account with this email already exists" });
 
   const assignedRole = normalizeRole(req.body.role) || "customer";
+  if (assignedRole === "admin") {
+    return res.status(403).json({
+      message: "Administrator accounts cannot be created via public registration.",
+    });
+  }
 
   const user = await User.create({
     name: credentials.name,
@@ -66,10 +73,14 @@ export const loginUser = TryCatch(async (req, res) => {
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    // Assign role if user has no role yet
-    if (!user.role && targetRole) {
+    // Assign role if user has no role yet (except admin)
+    if (!user.role && targetRole && targetRole !== "admin") {
       user.role = targetRole;
       await user.save();
+    } else if (targetRole === "admin" && user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied: This account does not have administrator privileges.",
+      });
     } else if (targetRole && user.role !== targetRole && user.role !== "admin") {
       return res.status(403).json({
         message: `Account role mismatch: This account is registered as a ${getRoleDisplayName(user.role)}, not a ${getRoleDisplayName(targetRole)}. Please switch to the ${getRoleDisplayName(user.role)} tab.`,
@@ -90,6 +101,11 @@ export const loginUser = TryCatch(async (req, res) => {
   let user = await User.findOne({ email });
 
   if (!user) {
+    if (targetRole === "admin") {
+      return res.status(403).json({
+        message: "Administrator accounts cannot be self-registered via OAuth.",
+      });
+    }
     user = await User.create({
       name,
       email,
@@ -97,9 +113,13 @@ export const loginUser = TryCatch(async (req, res) => {
       role: targetRole || "customer",
     });
   } else {
-    if (!user.role && targetRole) {
+    if (!user.role && targetRole && targetRole !== "admin") {
       user.role = targetRole;
       await user.save();
+    } else if (targetRole === "admin" && user.role !== "admin") {
+      return res.status(403).json({
+        message: "Access denied: This account does not have administrator privileges.",
+      });
     } else if (targetRole && user.role !== targetRole && user.role !== "admin") {
       return res.status(403).json({
         message: `Account role mismatch: This account is registered as a ${getRoleDisplayName(user.role)}, not a ${getRoleDisplayName(targetRole)}. Please switch to the ${getRoleDisplayName(user.role)} tab.`,

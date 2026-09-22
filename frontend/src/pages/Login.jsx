@@ -36,10 +36,18 @@ const ROLES = [
     icon: Bike,
     badge: "Delivery",
   },
+  {
+    id: "admin",
+    backendRole: "admin",
+    label: "Admin",
+    sublabel: "Platform control & system observability",
+    icon: ShieldCheck,
+    badge: "Console",
+  },
 ];
 
 const Login = () => {
-  const [selectedRole, setSelectedRole] = useState("customer"); // 'customer' | 'restaurant' | 'rider'
+  const [selectedRole, setSelectedRole] = useState("customer"); // 'customer' | 'restaurant' | 'rider' | 'admin'
   const [mode, setMode] = useState("login"); // 'login' | 'signup'
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -66,6 +74,9 @@ const Login = () => {
 
   const handleRoleChange = (roleId) => {
     setSelectedRole(roleId);
+    if (roleId === "admin") {
+      setMode("login");
+    }
   };
 
   const handleGoogleSuccess = async (authResult) => {
@@ -85,8 +96,16 @@ const Login = () => {
       setUser(result.data.user);
       setIsAuth(true);
 
-      // Direct to role dashboard
-      navigate("/");
+      // Direct to specific role dashboard
+      if (result.data.user?.role === "admin") {
+        navigate("/admin");
+      } else if (result.data.user?.role === "rider") {
+        navigate("/rider");
+      } else if (result.data.user?.role === "seller") {
+        navigate("/restaurant");
+      } else {
+        navigate("/");
+      }
     } catch (error) {
       console.log(error);
       const msg = error.response?.data?.message || "Problem during Google sign-in";
@@ -178,7 +197,15 @@ const Login = () => {
         setIsAuth(true);
         toast.success(data.message || `Signed in as ${currentRoleConfig.label}`);
 
-        navigate("/");
+        if (data.user?.role === "admin") {
+          navigate("/admin");
+        } else if (data.user?.role === "rider") {
+          navigate("/rider");
+        } else if (data.user?.role === "seller") {
+          navigate("/restaurant");
+        } else {
+          navigate("/");
+        }
       } else {
         // Signup flow
         const signupPayload = {
@@ -199,7 +226,15 @@ const Login = () => {
         setIsAuth(true);
         toast.success(data.message || `Account created as ${currentRoleConfig.label}!`);
 
-        navigate("/");
+        if (data.user?.role === "admin") {
+          navigate("/admin");
+        } else if (data.user?.role === "rider") {
+          navigate("/rider");
+        } else if (data.user?.role === "seller") {
+          navigate("/restaurant");
+        } else {
+          navigate("/");
+        }
       }
     } catch (error) {
       console.log("Auth error:", error);
@@ -259,6 +294,13 @@ const Login = () => {
                   Delivery Run.
                 </>
               )}
+              {selectedRole === "admin" && (
+                <>
+                  Platform Control. <br />
+                  Monitor Fleet, <br />
+                  Audit System.
+                </>
+              )}
             </h2>
 
             <p className="text-rose-100 text-xs leading-relaxed max-w-sm">
@@ -268,6 +310,8 @@ const Login = () => {
                 "Manage live kitchen orders, surplus listings, automated dispatch buffers, and smart restaurant demand analytics."}
               {selectedRole === "rider" &&
                 "Accept delivery batches, navigate real-time routes, monitor order earnings, and keep your community fed."}
+              {selectedRole === "admin" &&
+                "Verify restaurants, approve riders, inspect anomaly telemetry, and monitor platform observability in real time."}
             </p>
           </div>
 
@@ -300,12 +344,12 @@ const Login = () => {
               </p>
             </div>
 
-            {/* 1. SEPARATE AUTHENTICATION ROLES: 3 Clear Tabs */}
+            {/* 1. SEPARATE AUTHENTICATION ROLES: 4 Clear Tabs */}
             <div className="space-y-2">
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-wider block">
                 Select Your Role
               </label>
-              <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                 {ROLES.map((role) => {
                   const Icon = role.icon;
                   const isSelected = selectedRole === role.id;
@@ -344,30 +388,37 @@ const Login = () => {
             </div>
 
             {/* Mode Toggle: Sign In vs Sign Up */}
-            <div className="flex bg-slate-100 p-1 rounded-2xl">
-              <button
-                type="button"
-                onClick={() => setMode("login")}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  mode === "login"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("signup")}
-                className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
-                  mode === "signup"
-                    ? "bg-white text-slate-900 shadow-xs"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                New {currentRoleConfig.label} Registration
-              </button>
-            </div>
+            {selectedRole === "admin" ? (
+              <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200/80 flex items-center gap-2.5 text-xs text-amber-800 font-medium">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Admin accounts must be provisioned by a system administrator.</span>
+              </div>
+            ) : (
+              <div className="flex bg-slate-100 p-1 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => setMode("login")}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    mode === "login"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("signup")}
+                  className={`flex-1 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    mode === "signup"
+                      ? "bg-white text-slate-900 shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  New {currentRoleConfig.label} Registration
+                </button>
+              </div>
+            )}
 
             {/* Credentials Form */}
             <form onSubmit={handleSubmit} className="space-y-3.5">

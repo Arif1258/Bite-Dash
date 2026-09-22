@@ -195,6 +195,9 @@ const App = () => {
                     />
                   </Route>
 
+                  {/* Admin fallback for non-admins */}
+                  <Route path="/admin" element={<Navigate to={user ? "/" : "/login"} replace />} />
+
                   {/* Fallback route */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

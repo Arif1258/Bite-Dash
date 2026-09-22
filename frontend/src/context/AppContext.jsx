@@ -6,6 +6,23 @@ import { useLocationPermission } from "../hooks/useLocationPermission";
 
 const AppContext = createContext(undefined);
 
+const CART_CACHE_KEY = "bitedash_cart_cache";
+
+const loadCachedCart = () => {
+  try {
+    const raw = localStorage.getItem(CART_CACHE_KEY);
+    if (!raw) return { cart: [], subTotal: 0, quauntity: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      cart: Array.isArray(parsed.cart) ? parsed.cart : [],
+      subTotal: typeof parsed.subTotal === "number" ? parsed.subTotal : 0,
+      quauntity: typeof parsed.quauntity === "number" ? parsed.quauntity : 0,
+    };
+  } catch {
+    return { cart: [], subTotal: 0, quauntity: 0 };
+  }
+};
+
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isAuth, setIsAuth] = useState(false);
@@ -22,9 +39,10 @@ export const AppProvider = ({ children }) => {
     setLocation,
   } = useLocationPermission();
 
-  const [cart, setCart] = useState([]);
-  const [subTotal, setSubTotal] = useState(0);
-  const [quauntity, setQuauntity] = useState(0);
+  const cachedCart = loadCachedCart();
+  const [cart, setCart] = useState(cachedCart.cart);
+  const [subTotal, setSubTotal] = useState(cachedCart.subTotal);
+  const [quauntity, setQuauntity] = useState(cachedCart.quauntity);
   const [cartLoading, setCartLoading] = useState(false);
   const [cartError, setCartError] = useState(null);
 
@@ -38,6 +56,7 @@ export const AppProvider = ({ children }) => {
         setCart([]);
         setSubTotal(0);
         setQuauntity(0);
+        localStorage.removeItem(CART_CACHE_KEY);
         return;
       }
 
@@ -55,8 +74,12 @@ export const AppProvider = ({ children }) => {
       // Clean up invalid or expired token
       if (error.response?.status === 401 || error.response?.status === 403) {
         localStorage.removeItem("token");
+        localStorage.removeItem(CART_CACHE_KEY);
         setUser(null);
         setIsAuth(false);
+        setCart([]);
+        setSubTotal(0);
+        setQuauntity(0);
       }
     } finally {
       setLoading(false);
@@ -65,10 +88,18 @@ export const AppProvider = ({ children }) => {
 
   const fetchCart = useCallback(async () => {
     const token = localStorage.getItem("token");
-    if (!token || !user || user.role !== "customer") {
+    if (!token) {
       setCart([]);
       setSubTotal(0);
       setQuauntity(0);
+      localStorage.removeItem(CART_CACHE_KEY);
+      return;
+    }
+    if (user && user.role !== "customer") {
+      setCart([]);
+      setSubTotal(0);
+      setQuauntity(0);
+      localStorage.removeItem(CART_CACHE_KEY);
       return;
     }
     try {
@@ -80,9 +111,22 @@ export const AppProvider = ({ children }) => {
         },
       });
 
-      setCart(data.cart || []);
-      setSubTotal(data.subtotal || 0);
-      setQuauntity(data.cartLength || 0);
+      const newCart = data.cart || [];
+      const newSubTotal = data.subtotal || 0;
+      const newQty = data.cartLength || 0;
+
+      setCart(newCart);
+      setSubTotal(newSubTotal);
+      setQuauntity(newQty);
+
+      try {
+        localStorage.setItem(
+          CART_CACHE_KEY,
+          JSON.stringify({ cart: newCart, subTotal: newSubTotal, quauntity: newQty }),
+        );
+      } catch (e) {
+        console.warn("Failed to update cart cache:", e);
+      }
     } catch (error) {
       console.log("Cart fetch error:", error);
       setCartError(error.response?.data?.message || "Failed to load cart");
@@ -94,6 +138,7 @@ export const AppProvider = ({ children }) => {
   // Centralized logout that sanitizes all global states and storage
   const logout = useCallback(() => {
     localStorage.removeItem("token");
+    localStorage.removeItem(CART_CACHE_KEY);
     sessionStorage.clear();
     setUser(null);
     setIsAuth(false);
@@ -112,10 +157,11 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     if (user && user.role === "customer") {
       fetchCart();
-    } else {
+    } else if (user && user.role !== "customer") {
       setCart([]);
       setSubTotal(0);
       setQuauntity(0);
+      localStorage.removeItem(CART_CACHE_KEY);
     }
   }, [user, fetchCart]);
 
