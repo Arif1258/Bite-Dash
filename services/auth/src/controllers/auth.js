@@ -22,29 +22,66 @@ const sendAuthenticatedUser = (res, user, message) => {
   res.status(200).json({ message, token: issueToken(safeUser), user: safeUser });
 };
 
+const normalizeRole = (role) => {
+  if (!role) return null;
+  const r = role.toLowerCase().trim();
+  if (r === "restaurant" || r === "seller") return "seller";
+  if (r === "rider") return "rider";
+  if (r === "customer") return "customer";
+  return null;
+};
+
+const getRoleDisplayName = (r) => {
+  if (r === "seller" || r === "restaurant") return "Restaurant";
+  if (r === "rider") return "Rider";
+  return "Customer";
+};
+
 export const signupUser = TryCatch(async (req, res) => {
   const credentials = validateCredentials(req.body, true);
   if (!credentials) return res.status(400).json({ message: "Name, a valid email, and a password of 8-128 characters are required" });
   if (await User.exists({ email: credentials.email })) return res.status(409).json({ message: "An account with this email already exists" });
-  const user = await User.create({ name: credentials.name, email: credentials.email, passwordHash: await hashPassword(credentials.password) });
-  return sendAuthenticatedUser(res, user, "Account created successfully");
+
+  const assignedRole = normalizeRole(req.body.role) || "customer";
+
+  const user = await User.create({
+    name: credentials.name,
+    email: credentials.email,
+    passwordHash: await hashPassword(credentials.password),
+    role: assignedRole,
+  });
+
+  return sendAuthenticatedUser(res, user, `Account created successfully as ${getRoleDisplayName(assignedRole)}`);
 });
 
 export const loginUser = TryCatch(async (req, res) => {
-  const { code } = req.body;
+  const { code, role: requestedRole } = req.body;
+  const targetRole = normalizeRole(requestedRole);
 
   if (!code) {
     const credentials = validateCredentials(req.body);
     if (!credentials) return res.status(400).json({ message: "Valid email and password are required" });
     const user = await User.findOne({ email: credentials.email }).select("+passwordHash");
-    if (!user || !user.passwordHash || !(await verifyPassword(credentials.password, user.passwordHash))) return res.status(401).json({ message: "Invalid email or password" });
+    if (!user || !user.passwordHash || !(await verifyPassword(credentials.password, user.passwordHash))) {
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    // Assign role if user has no role yet
+    if (!user.role && targetRole) {
+      user.role = targetRole;
+      await user.save();
+    } else if (targetRole && user.role !== targetRole && user.role !== "admin") {
+      return res.status(403).json({
+        message: `Account role mismatch: This account is registered as a ${getRoleDisplayName(user.role)}, not a ${getRoleDisplayName(targetRole)}. Please switch to the ${getRoleDisplayName(user.role)} tab.`,
+      });
+    }
+
     return sendAuthenticatedUser(res, user, "Logged in successfully");
   }
 
+  // Google OAuth flow
   const googleRes = await oauth2client.getToken(code);
-
   oauth2client.setCredentials(googleRes.tokens);
-
   const userRes = await axios.get(
     `https://www.googleapis.com/oauth2/v1/userinfo?alt=json&access_token=${googleRes.tokens.access_token}`,
   );
@@ -57,7 +94,17 @@ export const loginUser = TryCatch(async (req, res) => {
       name,
       email,
       image: picture,
+      role: targetRole || "customer",
     });
+  } else {
+    if (!user.role && targetRole) {
+      user.role = targetRole;
+      await user.save();
+    } else if (targetRole && user.role !== targetRole && user.role !== "admin") {
+      return res.status(403).json({
+        message: `Account role mismatch: This account is registered as a ${getRoleDisplayName(user.role)}, not a ${getRoleDisplayName(targetRole)}. Please switch to the ${getRoleDisplayName(user.role)} tab.`,
+      });
+    }
   }
 
   return sendAuthenticatedUser(res, user, "Logged in successfully");
@@ -72,9 +119,9 @@ export const addUserRole = TryCatch(async (req, res) => {
     });
   }
 
-  const { role } = req.body;
+  const role = normalizeRole(req.body.role);
 
-  if (!allowedRoles.includes(role)) {
+  if (!role || !allowedRoles.includes(role)) {
     return res.status(400).json({
       message: "Invalid role",
     });
