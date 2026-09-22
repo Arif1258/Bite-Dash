@@ -33,5 +33,6 @@ const schema = new Schema(
 );
 
 schema.index({ location: "2dsphere" });
+schema.index({ userId: 1, createdAt: -1 });
 
 export default mongoose.model("Address", schema);

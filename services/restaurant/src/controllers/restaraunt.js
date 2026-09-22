@@ -172,23 +172,42 @@ export const updateRestaurant = TryCatch(async (req, res) => {
 });
 
 export const getNearbyRestaurant = TryCatch(async (req, res) => {
-  const { latitude, longitude, radius = 20000000, search = "" } = req.query;
+  const { latitude, longitude, radius = 20000000, search = "", page = 1, limit = 50 } = req.query;
 
-  if (!latitude || !longitude) {
-    return res.status(400).json({
-      message: "Latitude and longitude are required",
-    });
-  }
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 50));
+  const skip = (pageNum - 1) * limitNum;
 
   const query = {
     isVerified: true,
   };
 
-  if (search && typeof search === "string") {
-    query.name = { $regex: search, $options: "i" };
+  if (search && typeof search === "string" && search.trim()) {
+    query.name = { $regex: search.trim(), $options: "i" };
   }
 
-  const restaurants = await Restaurant.aggregate([
+  // If coordinates are missing, return verified restaurants sorted by open status and creation date
+  if (!latitude || !longitude || isNaN(Number(latitude)) || isNaN(Number(longitude))) {
+    const [restaurants, total] = await Promise.all([
+      Restaurant.find(query)
+        .sort({ isOpen: -1, createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Restaurant.countDocuments(query),
+    ]);
+
+    return res.json({
+      success: true,
+      count: restaurants.length,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum) || 1,
+      restaurants,
+    });
+  }
+
+  const pipeline = [
     {
       $geoNear: {
         near: {
@@ -214,11 +233,16 @@ export const getNearbyRestaurant = TryCatch(async (req, res) => {
         },
       },
     },
-  ]);
+    { $skip: skip },
+    { $limit: limitNum },
+  ];
+
+  const restaurants = await Restaurant.aggregate(pipeline);
 
   res.json({
     success: true,
     count: restaurants.length,
+    page: pageNum,
     restaurants,
   });
 });

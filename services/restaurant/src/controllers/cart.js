@@ -64,19 +64,34 @@ export const fetchMyCart = TryCatch(async (req, res) => {
 
   let subtotal = 0;
   let cartLength = 0;
+  const validCartItems = [];
+  const orphanedIds = [];
 
   for (const cartItem of cartItems) {
     const item = cartItem.itemId;
 
-    subtotal += item.price * cartItem.quauntity;
-    cartLength += cartItem.quauntity;
+    if (!item || typeof item.price !== "number") {
+      orphanedIds.push(cartItem._id);
+      continue;
+    }
+
+    subtotal += item.price * (cartItem.quauntity || 1);
+    cartLength += (cartItem.quauntity || 1);
+    validCartItems.push(cartItem);
+  }
+
+  // Cleanup orphaned cart records asynchronously if any were found
+  if (orphanedIds.length > 0) {
+    Cart.deleteMany({ _id: { $in: orphanedIds } }).catch((err) =>
+      console.warn("Orphaned cart item cleanup warning:", err.message)
+    );
   }
 
   return res.json({
     success: true,
     cartLength,
-    subtotal,
-    cart: cartItems,
+    subtotal: Math.round(subtotal * 100) / 100,
+    cart: validCartItems,
   });
 });
 

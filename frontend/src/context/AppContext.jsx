@@ -1,7 +1,8 @@
 import axios from "axios";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { authService, restaurantService } from "../main";
 import { Toaster } from "react-hot-toast";
+import { useLocationPermission } from "../hooks/useLocationPermission";
 
 const AppContext = createContext(undefined);
 
@@ -10,15 +11,33 @@ export const AppProvider = ({ children }) => {
   const [isAuth, setIsAuth] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [location, setLocation] = useState(null);
-  const [loadingLocation, setLoadingLocation] = useState(false);
-  const [city, setCity] = useState("Fecthing Location...");
+  // Hook-based robust location with Permissions API and caching
+  const {
+    location,
+    city,
+    loadingLocation,
+    permissionStatus,
+    permissionError,
+    requestLocation,
+    setLocation,
+  } = useLocationPermission();
 
-  async function fetchUser() {
+  const [cart, setCart] = useState([]);
+  const [subTotal, setSubTotal] = useState(0);
+  const [quauntity, setQuauntity] = useState(0);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [cartError, setCartError] = useState(null);
+
+  const fetchUser = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
 
       if (!token) {
+        setUser(null);
+        setIsAuth(false);
+        setCart([]);
+        setSubTotal(0);
+        setQuauntity(0);
         return;
       }
 
@@ -32,26 +51,32 @@ export const AppProvider = ({ children }) => {
       setUser(data);
       setIsAuth(true);
     } catch (error) {
-      console.log(error);
+      console.log("Auth check error:", error?.message);
+      // Clean up invalid or expired token
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem("token");
+        setUser(null);
+        setIsAuth(false);
+      }
     } finally {
       setLoading(false);
     }
-  }
+  }, []);
 
-  const [cart, setCart] = useState([]);
-  const [subTotal, setSubTotal] = useState(0);
-  const [quauntity, setQuauntity] = useState(0);
-  const [cartLoading, setCartLoading] = useState(false);
-  const [cartError, setCartError] = useState(null);
-
-  async function fetchCart() {
-    if (!user || user.role !== "customer") return;
+  const fetchCart = useCallback(async () => {
+    const token = localStorage.getItem("token");
+    if (!token || !user || user.role !== "customer") {
+      setCart([]);
+      setSubTotal(0);
+      setQuauntity(0);
+      return;
+    }
     try {
       setCartLoading(true);
       setCartError(null);
       const { data } = await axios.get(`${restaurantService}/api/cart/all`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${token}`,
         },
       });
 
@@ -64,78 +89,35 @@ export const AppProvider = ({ children }) => {
     } finally {
       setCartLoading(false);
     }
-  }
+  }, [user]);
+
+  // Centralized logout that sanitizes all global states and storage
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    sessionStorage.clear();
+    setUser(null);
+    setIsAuth(false);
+    setCart([]);
+    setSubTotal(0);
+    setQuauntity(0);
+    setCartError(null);
+    window.dispatchEvent(new CustomEvent("bitedash:logout"));
+  }, []);
 
   useEffect(() => {
     fetchUser();
-  }, []);
+  }, [fetchUser]);
 
+  // When user identity or role changes, update or clear cart
   useEffect(() => {
     if (user && user.role === "customer") {
       fetchCart();
+    } else {
+      setCart([]);
+      setSubTotal(0);
+      setQuauntity(0);
     }
-  }, [user]);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setLocation({
-        latitude: 19.076,
-        longitude: 72.8777,
-        formattedAddress: "Mumbai, Maharashtra, India",
-      });
-      setCity("Mumbai");
-      return;
-    }
-    setLoadingLocation(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`,
-          );
-          const data = await res.json();
-
-          setLocation({
-            latitude,
-            longitude,
-            formattedAddress: data.display_name || "Current Location",
-          });
-
-          setCity(
-            data.address?.city ||
-              data.address?.town ||
-              data.address?.village ||
-              "Your Location",
-          );
-          setLoadingLocation(false);
-        } catch (error) {
-          setLocation({
-            latitude,
-            longitude,
-            formattedAddress: "Current Location",
-          });
-          setCity("Your Location");
-          setLoadingLocation(false);
-        }
-      },
-      (error) => {
-        console.warn(
-          "Geolocation failed/blocked. Using default fallback coordinates (Mumbai).",
-          error,
-        );
-        setLocation({
-          latitude: 19.076,
-          longitude: 72.8777,
-          formattedAddress: "Mumbai, Maharashtra, India",
-        });
-        setCity("Mumbai");
-        setLoadingLocation(false);
-      },
-    );
-  }, []);
+  }, [user, fetchCart]);
 
   return (
     <AppContext.Provider
@@ -149,6 +131,10 @@ export const AppProvider = ({ children }) => {
         location,
         loadingLocation,
         city,
+        permissionStatus,
+        permissionError,
+        requestLocation,
+        setLocation,
         cart,
         setCart,
         fetchCart,
@@ -156,11 +142,11 @@ export const AppProvider = ({ children }) => {
         cartError,
         quauntity,
         subTotal,
+        logout,
       }}
     >
       {children}
-
-      <Toaster />
+      <Toaster position="top-center" />
     </AppContext.Provider>
   );
 };

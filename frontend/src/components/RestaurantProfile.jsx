@@ -56,22 +56,24 @@ const RestaurantProfile = ({ restaurant, isSeller, onUpdate }) => {
     }
   };
 
-  const { setIsAuth, setUser } = useAppData();
+  const { logout } = useAppData();
 
   const logoutHandler = async () => {
-    await axios.put(
-      `${restaurantService}/api/restaurant/status`,
-      { status: false },
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+    try {
+      await axios.put(
+        `${restaurantService}/api/restaurant/status`,
+        { status: false },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
         },
-      },
-    );
-    localStorage.setItem("token", "");
-    setIsAuth(false);
-    setUser(null);
-    toast.success("loggedOut successfully");
+      );
+    } catch {
+      // ignore
+    }
+    logout();
+    toast.success("Logged out successfully");
   };
   return (
     <div className="mx-auto max-w-xl rounded-xl bg-white shadow-sm overflow-hidden">

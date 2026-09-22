@@ -12,7 +12,7 @@ import { BiLogOut, BiRefresh } from "react-icons/bi";
 import toast from "react-hot-toast";
 
 const Admin = () => {
-  const { user, setUser, setIsAuth } = useAppData();
+  const { user, logout } = useAppData();
   const [restaurant, setRestaurant] = useState([]);
   const [riders, setRiders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -81,11 +81,8 @@ const Admin = () => {
   }, [tab]);
 
   const logoutHandler = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    setIsAuth(false);
+    logout();
     toast.success("Logged out successfully");
-    window.location.reload();
   };
 
   if (loading) {

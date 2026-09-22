@@ -4,7 +4,7 @@
     "PORT": "5006",
     "MONGO_URI": "mongodb+srv://arifahmed:arif7860@cluster0.nvu1g7y.mongodb.net/tomato?appName=Cluster0",
     "JWT_SEC": "mysupersecret",
-    "DB_NAME": "tomato"
+    "DB_NAME": "Zomato_Clone"
   },
   "builds": [
     {

@@ -60,14 +60,19 @@ const RiderOrderMap = ({ order }) => {
   ];
 
   useEffect(() => {
-    const fetchLocation = () => {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const latitude = pos.coords.latitude;
-          const longitude = pos.coords.longitude;
+    if (!navigator.geolocation) return;
 
-          setRiderLocation([latitude, longitude]);
+    let lastEmitTime = 0;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const latitude = pos.coords.latitude;
+        const longitude = pos.coords.longitude;
 
+        setRiderLocation([latitude, longitude]);
+
+        const now = Date.now();
+        if (now - lastEmitTime > 8000) {
+          lastEmitTime = now;
           axios.post(
             `${realtimeService}/api/v1/internal/emit`,
             {
@@ -80,21 +85,18 @@ const RiderOrderMap = ({ order }) => {
                 "x-internal-key": import.meta.env.VITE_INTERNAL_SERVICE_KEY,
               },
             },
-          );
-        },
-        (err) => console.log("Location Error:", err),
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5000,
-          timeout: 10000,
-        },
-      );
-    };
+          ).catch((err) => console.warn("Emit error:", err.message));
+        }
+      },
+      (err) => console.warn("Rider location watch warning:", err.message),
+      {
+        enableHighAccuracy: true,
+        maximumAge: 10000,
+        timeout: 15000,
+      }
+    );
 
-    fetchLocation();
-    const interval = setInterval(fetchLocation, 10000);
-
-    return () => clearInterval(interval);
+    return () => navigator.geolocation.clearWatch(watchId);
   }, [order.userId]);
 
   if (!riderLocation) return null;

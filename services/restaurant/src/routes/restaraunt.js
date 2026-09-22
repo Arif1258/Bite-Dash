@@ -1,5 +1,5 @@
 import express from "express";
-import { isAuth, isSeller } from "../middlewares/isAuth.js";
+import { isAuth, isSeller, optionalAuth } from "../middlewares/isAuth.js";
 import {
   addRestraunt,
   fetchMyRestaurant,
@@ -16,7 +16,7 @@ router.post("/new", isAuth, isSeller, uploadFile, addRestraunt);
 router.get("/my", isAuth, isSeller, fetchMyRestaurant);
 router.put("/status", isAuth, isSeller, updateStatusRestaurant);
 router.put("/edit", isAuth, isSeller, updateRestaurant);
-router.get("/all", isAuth, getNearbyRestaurant);
-router.get("/:id", isAuth, fetchSingleRestaurant);
+router.get("/all", optionalAuth, getNearbyRestaurant);
+router.get("/:id", optionalAuth, fetchSingleRestaurant);
 
 export default router;

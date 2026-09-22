@@ -6,51 +6,75 @@ import { realtimeService } from "../main";
 const SocketContext = createContext({ socket: null });
 
 export const SocketProvider = ({ children }) => {
-  const { isAuth } = useAppData();
+  const { isAuth, user } = useAppData();
 
   const socketRef = useRef(null);
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    if (!isAuth) {
-      socketRef.current?.disconnect();
-      socketRef.current = null;
-      setSocket(null);
+    const handleLogout = () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
+    };
+
+    window.addEventListener("bitedash:logout", handleLogout);
+    return () => window.removeEventListener("bitedash:logout", handleLogout);
+  }, []);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!isAuth || !token || !user) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocket(null);
+      }
       return;
     }
 
-    if (socketRef.current) return;
+    // Always clean up existing socket if user/token changed
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setSocket(null);
+    }
 
-    const socket = io(realtimeService, {
+    const newSocket = io(realtimeService, {
       auth: {
-        token: localStorage.getItem("token"),
+        token,
       },
-      // "polling" first so the connection works on Vercel serverless.
-      // Socket.io will auto-upgrade to "websocket" if the server supports it.
       transports: ["polling", "websocket"],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000,
     });
 
-    socketRef.current = socket;
-    setSocket(socket);
+    socketRef.current = newSocket;
+    setSocket(newSocket);
 
-    socket.on("connect", () => {
-      console.log("Socket Connected", socket.id);
+    newSocket.on("connect", () => {
+      console.log("Socket Connected for user:", user._id, newSocket.id);
     });
 
-    socket.on("disconnect", () => {
+    newSocket.on("disconnect", () => {
       console.log("Socket Disconnected");
     });
 
-    socket.on("connect_error", (err) => {
-      console.log("Socket Error:", err.message);
+    newSocket.on("connect_error", (err) => {
+      console.warn("Socket Error:", err.message);
     });
 
     return () => {
-      socket.disconnect();
-      socketRef.current = null;
-      setSocket(null);
+      newSocket.disconnect();
+      if (socketRef.current === newSocket) {
+        socketRef.current = null;
+        setSocket(null);
+      }
     };
-  }, [isAuth]);
+  }, [isAuth, user?._id, user?.restaurantId]);
 
   return (
     <SocketContext.Provider value={{ socket }}>

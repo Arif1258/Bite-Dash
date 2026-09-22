@@ -8,15 +8,13 @@ import {
 import { useState } from "react";
 
 const Account = () => {
-  const { user, setUser, setIsAuth } = useAppData();
+  const { user, logout } = useAppData();
   const navigate = useNavigate();
 
   const firstLetter = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
   const logoutHandler = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    setIsAuth(false);
+    logout();
     navigate("/");
     toast.success("Logged out successfully");
   };

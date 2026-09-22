@@ -116,8 +116,8 @@ export const payWithStripe = async (req, res) => {
         orderId,
       },
 
-      success_url: `${process.env.FRONTEND_URL}/ordersuccess?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout`,
+      success_url: `${req.headers.origin || process.env.FRONTEND_URL || "https://bitedash-frontend-two.vercel.app"}/ordersuccess?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.origin || process.env.FRONTEND_URL || "https://bitedash-frontend-two.vercel.app"}/checkout`,
     });
 
     res.json({

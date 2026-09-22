@@ -11,7 +11,7 @@ import RiderCurrentOrder from "../components/RiderCurrentOrder";
 import RiderOrderMap from "../components/RiderOrderMap";
 
 const RiderDashboard = () => {
-  const { user, setUser, setIsAuth } = useAppData();
+  const { user, location, requestLocation, logout } = useAppData();
   const { socket } = useSocket();
 
   const [profile, setProfile] = useState(null);
@@ -29,30 +29,23 @@ const RiderDashboard = () => {
   const [audioUnlocked, setAudioUnlocked] = useState(false);
   const audioRef = useRef(null);
 
-  useEffect(() => {
-    audioRef.current = new Audio(audio);
-    audioRef.current.preload = "auto";
-  }, []);
-
   const unlockAudio = async () => {
     try {
-      if (!audioRef.current) return;
-      await audioRef.current.play();
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      setAudioUnlocked(true);
-      toast.success("Sound Enabled");
+      if (audioRef.current) {
+        await audioRef.current.play();
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        setAudioUnlocked(true);
+        toast.success("Sound alert ready for new orders");
+      }
     } catch (error) {
       toast.error("Tap again to enable sound");
     }
   };
 
   const logoutHandler = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    setIsAuth(false);
+    logout();
     toast.success("Logged out successfully");
-    window.location.reload();
   };
 
   useEffect(() => {
@@ -192,43 +185,36 @@ const RiderDashboard = () => {
   };
 
   const toggleAvailiblity = async () => {
-    if (!navigator.geolocation) {
-      toast.error("Location Access Required");
-      return;
-    }
-
     setToggling(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          await axios.patch(
-            `${riderService}/api/rider/toggle`,
-            {
-              isAvailble: !profile?.isAvailble,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem("token")}`,
-              },
-            }
-          );
-
-          toast.success(profile?.isAvailble ? "You are offline" : "You are online");
-          fetchProfile();
-        } catch (error) {
-          toast.error(error.response?.data?.message || "Failed to toggle status");
-        } finally {
-          setToggling(false);
-        }
-      },
-      (err) => {
-        setToggling(false);
-        toast.error("Please allow location access to go online");
+    try {
+      let coords = location;
+      if (!coords || !coords.latitude) {
+        coords = await requestLocation();
       }
-    );
+      const lat = coords?.latitude || 19.076;
+      const lng = coords?.longitude || 72.8777;
+
+      await axios.patch(
+        `${riderService}/api/rider/toggle`,
+        {
+          isAvailble: !profile?.isAvailble,
+          latitude: lat,
+          longitude: lng,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      toast.success(profile?.isAvailble ? "You are offline" : "You are online");
+      fetchProfile();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to toggle status");
+    } finally {
+      setToggling(false);
+    }
   };
 
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -238,46 +224,58 @@ const RiderDashboard = () => {
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
-    if (!navigator.geolocation) {
-      toast.error("Location Access Required");
+    const cleanPhone = phoneNumber.trim();
+    const cleanAadhar = aadharNumber.trim();
+    const cleanDl = drivingLicenseNumber.trim();
+
+    if (!cleanPhone || cleanPhone.length !== 10) {
+      toast.error("Please enter a valid 10-digit mobile number");
+      return;
+    }
+    if (!cleanAadhar || cleanAadhar.length !== 12) {
+      toast.error("Please enter a valid 12-digit Aadhar number");
+      return;
+    }
+    if (!cleanDl || cleanDl.length < 5) {
+      toast.error("Please enter a valid Driving License number");
+      return;
+    }
+    if (!image) {
+      toast.error("Please upload your profile photo");
       return;
     }
 
     setSubmitting(true);
-
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const formData = new FormData();
-        formData.append("phoneNumber", phoneNumber);
-        formData.append("aadharNumber", aadharNumber);
-        formData.append("drivingLicenseNumber", drivingLicenseNumber);
-        formData.append("latitude", pos.coords.latitude.toString());
-        formData.append("longitude", pos.coords.longitude.toString());
-
-        if (image) {
-          formData.append("file", image);
-        }
-
-        try {
-          const { data } = await axios.post(`${riderService}/api/rider/new`, formData, {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          });
-
-          toast.success(data.message);
-          fetchProfile();
-        } catch (error) {
-          toast.error(error.response?.data?.message || "Failed to create profile");
-        } finally {
-          setSubmitting(false);
-        }
-      },
-      () => {
-        setSubmitting(false);
-        toast.error("Location permission required");
+    try {
+      let coords = location;
+      if (!coords || !coords.latitude) {
+        coords = await requestLocation();
       }
-    );
+
+      const lat = coords?.latitude || 19.076;
+      const lng = coords?.longitude || 72.8777;
+
+      const formData = new FormData();
+      formData.append("phoneNumber", cleanPhone);
+      formData.append("aadharNumber", cleanAadhar);
+      formData.append("drivingLicenseNumber", cleanDl);
+      formData.append("latitude", lat.toString());
+      formData.append("longitude", lng.toString());
+      formData.append("file", image);
+
+      const { data } = await axios.post(`${riderService}/api/rider/new`, formData, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+      });
+
+      toast.success(data.message || "Rider profile submitted successfully!");
+      fetchProfile();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to create profile");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (

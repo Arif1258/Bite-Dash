@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 
 const Navbar = () => {
-  const { isAuth, user, setUser, setIsAuth, city, quauntity, cart, subTotal } = useAppData();
+  const { isAuth, user, city, quauntity, cart, subTotal, logout } = useAppData();
   const currLocation = useLocation();
   const navigate = useNavigate();
 
@@ -34,9 +34,9 @@ const Navbar = () => {
   // Debounced search sync
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (search) {
-        setSearchParams({ search });
-      } else if (currLocation.pathname === "/") {
+      if (search.trim()) {
+        setSearchParams({ search: search.trim() });
+      } else {
         setSearchParams({});
       }
     }, 350);
@@ -45,9 +45,7 @@ const Navbar = () => {
   }, [search]);
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setUser(null);
-    setIsAuth(false);
+    logout();
     setUserDropdownOpen(false);
     setMobileMenuOpen(false);
     navigate("/");

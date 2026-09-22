@@ -256,7 +256,20 @@ export const fetchRestaurantOrders = TryCatch(async (req, res) => {
     });
   }
 
-  const limit = req.query.limit ? Number(req.query.limit) : 0;
+  const restaurant = await Restaurant.findById(restaurantId);
+  if (!restaurant) {
+    return res.status(404).json({
+      message: "Restaurant not found",
+    });
+  }
+
+  if (user.role !== "admin" && restaurant.ownerId.toString() !== user._id.toString()) {
+    return res.status(403).json({
+      message: "Forbidden: You do not own this restaurant",
+    });
+  }
+
+  const limit = req.query.limit ? Math.min(100, Math.max(1, Number(req.query.limit))) : 50;
 
   const orders = await Order.find({
     restaurantId,
@@ -300,9 +313,9 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
     });
   }
 
-  if (order.paymentStatus !== "paid") {
-    return res.status(404).json({
-      message: "Order not completed",
+  if (order.paymentStatus !== "paid" && order.paymentMethod !== "cod") {
+    return res.status(400).json({
+      message: "Order payment has not been completed",
     });
   }
 
@@ -399,24 +412,45 @@ export const getMyOrders = TryCatch(async (req, res) => {
     });
   }
 
-  const orders = await Order.find({
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+  const skip = (page - 1) * limit;
+
+  const filter = {
     userId: req.user._id.toString(),
     $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
-  }).sort({ createdAt: -1 });
+  };
+
+  const [orders, total] = await Promise.all([
+    Order.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Order.countDocuments(filter),
+  ]);
 
   const ordersWithETA = await Promise.all(
     orders.map(async (order) => {
       const orderObj = order.toObject();
       if (order.status !== "delivered" && order.status !== "cancelled") {
-        const eta = await getDetailedETA(order);
-        orderObj.dynamicETA = eta.totalETA;
-        orderObj.etaDetails = eta;
+        try {
+          const eta = await getDetailedETA(order);
+          orderObj.dynamicETA = eta.totalETA;
+          orderObj.etaDetails = eta;
+        } catch {
+          orderObj.dynamicETA = 30;
+        }
       }
       return orderObj;
     })
   );
 
-  res.json({ orders: ordersWithETA });
+  res.json({
+    orders: ordersWithETA,
+    total,
+    page,
+    totalPages: Math.ceil(total / limit) || 1,
+  });
 });
 
 import { calculateOrderETA, getDetailedETA } from "../services/etaService.js";
@@ -437,16 +471,21 @@ export const fetchSingleOrder = TryCatch(async (req, res) => {
     });
   }
 
-  // Allow rider, admin or owner seller to view order as well
-  const isAuthorized = 
+  let isAuthorized =
     order.userId === req.user._id.toString() ||
     order.riderId === req.user._id.toString() ||
-    req.user.role === "admin" ||
-    req.user.role === "seller";
+    req.user.role === "admin";
+
+  if (!isAuthorized && req.user.role === "seller") {
+    const restaurant = await Restaurant.findById(order.restaurantId);
+    if (restaurant && restaurant.ownerId.toString() === req.user._id.toString()) {
+      isAuthorized = true;
+    }
+  }
 
   if (!isAuthorized) {
-    return res.status(401).json({
-      message: "You are not allowed to view this order",
+    return res.status(403).json({
+      message: "You are not authorized to view this order",
     });
   }
 
