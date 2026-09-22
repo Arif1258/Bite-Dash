@@ -1,5 +1,5 @@
 export const ORDER_ACTIONS = {
-  placed: ["accepted"],
-  accepted: ["preparing"],
+  placed: ["accepted", "cancelled"],
+  accepted: ["preparing", "cancelled"],
   preparing: ["ready_for_rider"],
 };

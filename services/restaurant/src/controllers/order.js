@@ -18,6 +18,24 @@ const getUserIdQuery = (userId) => {
   return { $or: or };
 };
 
+export const emitRealtimeEvent = async (event, room, payload) => {
+  if (!process.env.REALTIME_SERVICE) return;
+  try {
+    await axios.post(
+      `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
+      { event, room, payload },
+      {
+        headers: {
+          "x-internal-key": process.env.INTERNAL_SERVICE_KEY,
+        },
+        timeout: 4000,
+      }
+    );
+  } catch (err) {
+    console.warn(`[Realtime] Failed to emit ${event} to ${room}:`, err.message);
+  }
+};
+
 export const createOrder = TryCatch(async (req, res) => {
   const user = req.user;
   if (!user) {
@@ -200,6 +218,20 @@ export const createOrder = TryCatch(async (req, res) => {
   // Clear cart only after successful order creation
   await Cart.deleteMany(userIdQuery);
 
+  // Directly notify restaurant and user via Realtime socket
+  emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
+    orderId: order._id.toString(),
+    restaurantId: order.restaurantId,
+    status: order.status,
+    totalAmount: order.totalAmount,
+    paymentMethod: order.paymentMethod,
+    paymentStatus: order.paymentStatus,
+  });
+  emitRealtimeEvent("order:update", `user:${order.userId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+  });
+
   // Publish event asynchronously
   try {
     const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
@@ -282,6 +314,18 @@ export const confirmRazorpayPayment = TryCatch(async (req, res) => {
     { new: true },
   );
   if (!order) return res.status(400).json({ message: "Payment does not match a pending order" });
+
+  emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+    paymentStatus: "paid",
+  });
+  emitRealtimeEvent("order:update", `user:${order.userId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+    paymentStatus: "paid",
+  });
+
   return res.json({ success: true, order });
 });
 
@@ -318,7 +362,7 @@ export const fetchRestaurantOrders = TryCatch(async (req, res) => {
   const limit = req.query.limit ? Math.min(100, Math.max(1, Number(req.query.limit))) : 50;
 
   const orders = await Order.find({
-    restaurantId,
+    restaurantId: { $in: [restaurantId, String(restaurantId)] },
     $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
   })
     .sort({ createdAt: -1 })
@@ -331,7 +375,7 @@ export const fetchRestaurantOrders = TryCatch(async (req, res) => {
   });
 });
 
-const ALLOWED_STATUSES = ["accepted", "preparing", "ready_for_rider"];
+const ALLOWED_STATUSES = ["accepted", "preparing", "ready_for_rider", "cancelled"];
 
 export const updateOrderStatus = TryCatch(async (req, res) => {
   const user = req.user;
@@ -373,7 +417,7 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
     });
   }
 
-  if (restaurant.ownerId !== user._id.toString()) {
+  if (user.role !== "admin" && restaurant.ownerId !== user._id.toString()) {
     return res.status(401).json({
       message: "You are not allowed to update this order",
     });
@@ -392,6 +436,9 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
   } else if (status === "ready_for_rider") {
     note = "Food is ready! Waiting for rider pickup.";
     rabbitMQEvent = "ORDER_READY";
+  } else if (status === "cancelled") {
+    note = "Order was rejected or cancelled by the restaurant.";
+    rabbitMQEvent = "ORDER_CANCELLED";
   }
 
   order.timeline.push({
@@ -415,34 +462,34 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
     }
   }
 
-  await axios.post(
-    `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
-    {
-      event: "order:update",
-      room: `user:${order.userId}`,
-      payload: {
-        orderId: order._id,
-        status: order.status,
-      },
-    },
-    {
-      headers: {
-        "x-internal-key": process.env.INTERNAL_SERVICE_KEY,
-      },
-    },
-  );
+  await emitRealtimeEvent("order:update", `user:${order.userId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+  });
+  await emitRealtimeEvent("order:update", `restaurant:${order.restaurantId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+  });
 
-  // now assign riders
+  // Notify riders when order is ready for pickup
   if (status === "ready_for_rider") {
-    console.log("Publishing Order ready for rider event for order", order._id);
+    console.log("Notifying riders for ready order", order._id);
 
-    await publishEvent("ORDER_READY_FOR_RIDER", {
+    await emitRealtimeEvent("order:available", "riders", {
       orderId: order._id.toString(),
       restaurantId: restaurant._id.toString(),
       location: restaurant.autoLocation,
     });
 
-    console.log("Event Published successfully");
+    try {
+      await publishEvent("ORDER_READY_FOR_RIDER", {
+        orderId: order._id.toString(),
+        restaurantId: restaurant._id.toString(),
+        location: restaurant.autoLocation,
+      });
+    } catch (err) {
+      console.warn("Publish ORDER_READY_FOR_RIDER warning:", err.message);
+    }
   }
 
   res.json({
@@ -812,6 +859,17 @@ export const confirmStripePayment = TryCatch(async (req, res) => {
 
   if (!order) return res.status(404).json({ message: "Order not found" });
 
+  emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+    paymentStatus: "paid",
+  });
+  emitRealtimeEvent("order:update", `user:${order.userId}`, {
+    orderId: order._id.toString(),
+    status: order.status,
+    paymentStatus: "paid",
+  });
+
   try {
     const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
     await publishOrderLifecycleEvent("ORDER_PAID", {
@@ -824,5 +882,25 @@ export const confirmStripePayment = TryCatch(async (req, res) => {
   }
 
   return res.json({ success: true, order });
+});
+
+export const fetchAvailableOrdersForRiders = TryCatch(async (req, res) => {
+  if (!req.user || !["rider", "admin"].includes(req.user.role)) {
+    return res.status(403).json({ message: "Forbidden: Rider access required" });
+  }
+
+  const orders = await Order.find({
+    status: "ready_for_rider",
+    riderId: null,
+    $or: [{ paymentStatus: "paid" }, { paymentMethod: "cod" }],
+  })
+    .sort({ updatedAt: -1 })
+    .limit(20);
+
+  return res.json({
+    success: true,
+    count: orders.length,
+    orders,
+  });
 });
 

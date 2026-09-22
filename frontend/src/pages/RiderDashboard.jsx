@@ -141,11 +141,42 @@ const RiderDashboard = () => {
     }
   };
 
+  const fetchAvailableOrders = async () => {
+    if (!profile?.isAvailble || currentOrder) return;
+    try {
+      const { data } = await axios.get(
+        `${restaurantService}/api/order/available/rider`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+      if (data.success && data.orders?.length > 0) {
+        const orderIds = data.orders.map((o) => o._id);
+        setIncomingOrders((prev) => {
+          const combined = [...prev];
+          orderIds.forEach((id) => {
+            if (!combined.includes(id)) combined.push(id);
+          });
+          return combined;
+        });
+      }
+    } catch (err) {
+      console.warn("Available orders check warning:", err.message);
+    }
+  };
+
   useEffect(() => {
     if (profile?.isAvailble && !currentOrder) {
       fetchBatches();
-      const interval = setInterval(fetchBatches, 15000);
-      return () => clearInterval(interval);
+      fetchAvailableOrders();
+      const batchInterval = setInterval(fetchBatches, 15000);
+      const ordersInterval = setInterval(fetchAvailableOrders, 8000);
+      return () => {
+        clearInterval(batchInterval);
+        clearInterval(ordersInterval);
+      };
     }
   }, [profile?.isAvailble, currentOrder]);
 

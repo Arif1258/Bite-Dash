@@ -14,6 +14,7 @@ import {
   getMyOrders,
   updateOrderStatus,
   updateOrderStatusRider,
+  fetchAvailableOrdersForRiders,
 } from "../controllers/order.js";
 
 const router = express.Router();
@@ -22,6 +23,9 @@ const router = express.Router();
 
 // Customer: get their orders
 router.get("/myorder", isAuth, getMyOrders);
+
+// Rider / Admin: get available orders ready for delivery pickup
+router.get("/available/rider", isAuth, fetchAvailableOrdersForRiders);
 
 // Internal: get order for payment (called by utils service)
 router.get(

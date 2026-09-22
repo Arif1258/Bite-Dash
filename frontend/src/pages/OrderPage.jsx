@@ -36,7 +36,14 @@ const OrderPage = () => {
 
   useEffect(() => {
     fetchOrder();
-  }, [id]);
+    const interval = setInterval(() => {
+      if (order && (order.status === "delivered" || order.status === "cancelled")) {
+        return;
+      }
+      fetchOrder();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [id, order?.status]);
 
   useEffect(() => {
     if (!socket) return;

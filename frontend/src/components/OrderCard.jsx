@@ -18,6 +18,8 @@ const statusColor = (status) => {
       return "bg-purple-100 text-purple-700";
     case "delivered":
       return "bg-green-100 text-green-700";
+    case "cancelled":
+      return "bg-red-100 text-red-700";
     default:
       return "bg-gray-100 text-gray-700";
   }
@@ -56,10 +58,10 @@ const OrderCard = ({ order, onStatusUpdate }) => {
         },
       );
 
-      toast.success("Order updated");
+      toast.success(status === "cancelled" ? "Order rejected" : "Order updated");
       onStatusUpdate?.();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(error.response?.data?.message || "Failed to update order");
     } finally {
       setLoading(false);
     }
@@ -91,18 +93,22 @@ const OrderCard = ({ order, onStatusUpdate }) => {
         <span>₹{order.totalAmount}</span>
       </div>
 
-      <p className="text-xs text-gray-400">Payment: {order.paymentStatus}</p>
+      <p className="text-xs text-gray-400">Payment: {order.paymentStatus} ({order.paymentMethod?.toUpperCase() || "COD"})</p>
 
-      {order.paymentStatus === "paid" && actions.length > 0 && (
+      {(order.paymentStatus === "paid" || order.paymentMethod === "cod") && actions.length > 0 && (
         <div className="flex flex-wrap gap-2 pt-2">
           {actions.map((status) => (
             <button
               key={status}
               disabled={loading}
               onClick={() => updateStatus(status)}
-              className="rounded-lg bg-[#e23744] px-3 py-1 text-xs text-white hover:bg-[#d32f3a] disabled:opacity-50"
+              className={`rounded-lg px-3 py-1 text-xs font-semibold disabled:opacity-50 transition ${
+                status === "cancelled"
+                  ? "border border-red-500 text-red-600 hover:bg-red-50"
+                  : "bg-[#e23744] text-white hover:bg-[#d32f3a]"
+              }`}
             >
-              Mark as {status.replaceAll("_", " ")}
+              {status === "cancelled" ? "Reject Order" : `Mark as ${status.replaceAll("_", " ")}`}
             </button>
           ))}
         </div>
