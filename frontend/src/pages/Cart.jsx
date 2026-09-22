@@ -9,6 +9,7 @@ import {
   ShieldCheck, Clock, MapPin, Sparkles, CheckCircle2, 
   Store, AlertCircle, RefreshCw, X 
 } from "lucide-react";
+import { getAuthToken } from "../utils/authStorage";
 
 const Cart = () => {
   const { cart, subTotal, quauntity, fetchCart, cartLoading, cartError } = useAppData();
@@ -124,7 +125,7 @@ const Cart = () => {
         { itemId },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );
@@ -145,7 +146,7 @@ const Cart = () => {
         { itemId },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );
@@ -170,7 +171,7 @@ const Cart = () => {
           payload,
           {
             headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${getAuthToken()}`,
             },
           },
         );
@@ -184,7 +185,7 @@ const Cart = () => {
               { itemId },
               {
                 headers: {
-                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                  Authorization: `Bearer ${getAuthToken()}`,
                 },
               },
             );
@@ -209,7 +210,7 @@ const Cart = () => {
       setClearingCart(true);
       await axios.delete(`${restaurantService}/api/cart/clear`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${getAuthToken()}`,
         },
       });
       await fetchCart();

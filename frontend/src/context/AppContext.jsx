@@ -5,11 +5,15 @@ import { Toaster } from "react-hot-toast";
 import { useLocationPermission } from "../hooks/useLocationPermission";
 import { getAuthToken, setAuthToken, clearAuthToken, getCachedUser } from "../utils/authStorage";
 
-// Automatically attach current tab's auth token to all requests if not explicitly set
+// Automatically attach current tab's auth token to all requests
 axios.interceptors.request.use((config) => {
   const token = getAuthToken();
-  if (token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`;
+  config.headers = config.headers || {};
+  if (token) {
+    const existing = config.headers.Authorization || config.headers.authorization;
+    if (!existing || existing.startsWith("Bearer ")) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
   }
   return config;
 });
@@ -149,19 +153,23 @@ export const AppProvider = ({ children }) => {
     }
   }, [user]);
 
-  // Centralized logout that sanitizes all global states and storage for current tab
-  const logout = useCallback(() => {
-    clearAuthToken();
-    sessionStorage.removeItem(CART_CACHE_KEY);
-    localStorage.removeItem(CART_CACHE_KEY);
-    setUser(null);
-    setIsAuth(false);
+  const clearCartState = useCallback(() => {
     setCart([]);
     setSubTotal(0);
     setQuauntity(0);
+    sessionStorage.removeItem(CART_CACHE_KEY);
+    localStorage.removeItem(CART_CACHE_KEY);
+  }, []);
+
+  // Centralized logout that sanitizes all global states and storage for current tab
+  const logout = useCallback(() => {
+    clearAuthToken();
+    clearCartState();
+    setUser(null);
+    setIsAuth(false);
     setCartError(null);
     window.dispatchEvent(new CustomEvent("bitedash:logout"));
-  }, []);
+  }, [clearCartState]);
 
   useEffect(() => {
     fetchUser();
@@ -198,6 +206,7 @@ export const AppProvider = ({ children }) => {
         cart,
         setCart,
         fetchCart,
+        clearCartState,
         cartLoading,
         cartError,
         quauntity,

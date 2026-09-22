@@ -7,6 +7,7 @@ import axios from "axios";
 import { restaurantService } from "../main";
 import toast from "react-hot-toast";
 import { useAppData } from "../context/AppContext";
+import { getAuthToken } from "../utils/authStorage";
 
 const MenuItems = ({ items, onItemDeleted, isSeller }) => {
   const [loadingItemId, setLoadingItemId] = useState(null);
@@ -19,7 +20,7 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
     try {
       await axios.delete(`${restaurantService}/api/item/${itemId}`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${getAuthToken()}`,
         },
       });
 
@@ -38,7 +39,7 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
         {},
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );
@@ -63,7 +64,7 @@ const MenuItems = ({ items, onItemDeleted, isSeller }) => {
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );

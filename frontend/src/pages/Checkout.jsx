@@ -9,21 +9,28 @@ import {
   Plus, CheckCircle2, ChevronRight, Store, ArrowLeft, Loader2, Sparkles 
 } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
+import { getAuthToken } from "../utils/authStorage";
 
 const Checkout = () => {
-  const { cart, subTotal, quauntity, fetchCart, cartLoading, loading } = useAppData();
+  const { cart, subTotal, quauntity, fetchCart, clearCartState, cartLoading, loading } = useAppData();
   const navigate = useNavigate();
 
   const [addresses, setAddresses] = useState([]);
   const [selectedAddressId, setselectedAddressId] = useState(null);
   const [loadingAddress, setLoadingAddress] = useState(true);
 
-  const [selectedPayment, setSelectedPayment] = useState("stripe"); // 'stripe' | 'razorpay' | 'cod'
+  const [selectedPayment, setSelectedPayment] = useState("cod"); // 'cod' | 'razorpay' | 'stripe'
   const [loadingRazorpay, setLoadingRazorpay] = useState(false);
   const [loadingStripe, setLoadingStripe] = useState(false);
   const [loadingCOD, setLoadingCOD] = useState(false);
   const [creatingOrder, setCreatingOrder] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const isSubmittingRef = useRef(false);
+
+  // Sync latest cart on mount
+  useEffect(() => {
+    fetchCart();
+  }, [fetchCart]);
 
   useEffect(() => {
     const fetchAddresses = async () => {
@@ -37,7 +44,7 @@ const Checkout = () => {
           `${restaurantService}/api/address/all`,
           {
             headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              Authorization: `Bearer ${getAuthToken()}`,
             },
           },
         );
@@ -102,7 +109,7 @@ const Checkout = () => {
   const grandTotal = subTotal + deliveryFee + platformFee;
 
   const createOrder = async (paymentMethod) => {
-    if (isSubmittingRef.current) return null;
+    if (isSubmittingRef.current || isPlacingOrder) return null;
     if (!selectedAddressId) {
       toast.error("Please select a delivery address");
       return null;
@@ -110,16 +117,25 @@ const Checkout = () => {
 
     isSubmittingRef.current = true;
     setCreatingOrder(true);
+    setIsPlacingOrder(true);
     try {
+      // Build full items payload so backend can self-heal even if a storage desync occurred
+      const itemsPayload = (cart || []).map((c) => ({
+        itemId: c.itemId?._id || c.itemId,
+        restaurantId: c.restaurantId?._id || c.restaurantId,
+        quauntity: c.quauntity || 1,
+      }));
+
       const { data } = await axios.post(
         `${restaurantService}/api/order/new`,
         {
           paymentMethod,
           addressId: selectedAddressId,
+          items: itemsPayload,
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );
@@ -130,6 +146,7 @@ const Checkout = () => {
       return null;
     } finally {
       setCreatingOrder(false);
+      setIsPlacingOrder(false);
       isSubmittingRef.current = false;
     }
   };
@@ -151,6 +168,11 @@ const Checkout = () => {
         name: "BiteDash",
         description: "Food Order Payment",
         order_id: razorpayOrderId,
+        modal: {
+          ondismiss: () => {
+            toast("Payment cancelled — your cart items are preserved 🛒", { icon: "ℹ️" });
+          },
+        },
         handler: async (response) => {
           try {
             await axios.post(`${utilsService}/api/payment/verify`, {
@@ -160,6 +182,8 @@ const Checkout = () => {
               orderId,
             });
 
+            clearCartState();
+            await fetchCart();
             toast.success("Payment successful 🎉");
             navigate("/paymentsuccess/" + response.razorpay_payment_id);
           } catch (error) {
@@ -192,6 +216,7 @@ const Checkout = () => {
       });
 
       if (data.url) {
+        clearCartState();
         window.location.href = data.url;
       } else {
         toast.error("Failed to create Stripe session");
@@ -208,6 +233,7 @@ const Checkout = () => {
       setLoadingCOD(true);
       const order = await createOrder("cod");
       if (!order) return;
+      clearCartState();
       await fetchCart();
       toast.success("Order placed successfully with Cash on Delivery 🎉");
       navigate(`/order/${order.orderId}`);
@@ -218,13 +244,14 @@ const Checkout = () => {
     }
   };
 
-  const handleProcessPayment = () => {
-    if (selectedPayment === "stripe") payWithStripe();
-    else if (selectedPayment === "razorpay") payWithRazorpay();
-    else if (selectedPayment === "cod") payWithCOD();
+  const handleProcessPayment = async () => {
+    if (isSubmittingRef.current || isPlacingOrder) return;
+    if (selectedPayment === "stripe") await payWithStripe();
+    else if (selectedPayment === "razorpay") await payWithRazorpay();
+    else if (selectedPayment === "cod") await payWithCOD();
   };
 
-  const isProcessing = creatingOrder || loadingStripe || loadingRazorpay || loadingCOD;
+  const isProcessing = creatingOrder || isPlacingOrder || loadingStripe || loadingRazorpay || loadingCOD;
 
   return (
     <div className="min-h-screen bg-slate-50/60 py-8 px-4 sm:px-6">

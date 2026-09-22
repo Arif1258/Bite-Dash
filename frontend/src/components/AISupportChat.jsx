@@ -10,6 +10,7 @@ import {
   FoodCard, RestaurantCard, CartCard, OrderCard, CouponCard 
 } from "./AgentCards";
 import toast from "react-hot-toast";
+import { getAuthToken } from "../utils/authStorage";
 
 const AISupportChat = ({ orderId, isFloating = false }) => {
   const { user, fetchCart } = useAppData();
@@ -59,7 +60,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
         { restaurantId, itemId },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         }
       );
@@ -111,7 +112,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         }
       );

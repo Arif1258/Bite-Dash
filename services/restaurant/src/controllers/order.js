@@ -80,9 +80,33 @@ export const createOrder = TryCatch(async (req, res) => {
 
   const userIdQuery = getUserIdQuery(user._id);
 
-  const cartItems = await Cart.find(userIdQuery)
+  let cartItems = await Cart.find(userIdQuery)
     .populate("itemId")
     .populate("restaurantId");
+
+  // Fallback: If DB cart is empty but frontend passed valid cart items (e.g. storage desync or race condition)
+  if (
+    (!cartItems || cartItems.length === 0) &&
+    req.body.items &&
+    Array.isArray(req.body.items) &&
+    req.body.items.length > 0
+  ) {
+    for (const rawItem of req.body.items) {
+      const itId = rawItem.itemId?._id || rawItem.itemId || rawItem.id;
+      const restId = rawItem.restaurantId?._id || rawItem.restaurantId;
+      const qty = Math.max(1, Number(rawItem.quauntity || rawItem.quantity || 1));
+      if (mongoose.Types.ObjectId.isValid(itId) && mongoose.Types.ObjectId.isValid(restId)) {
+        await Cart.findOneAndUpdate(
+          { userId: user._id.toString(), restaurantId: restId, itemId: itId },
+          { $set: { quauntity: qty } },
+          { upsert: true, new: true }
+        );
+      }
+    }
+    cartItems = await Cart.find(userIdQuery)
+      .populate("itemId")
+      .populate("restaurantId");
+  }
 
   if (!cartItems || cartItems.length === 0) {
     return res.status(400).json({ message: "Cart is empty" });
@@ -214,8 +238,10 @@ export const createOrder = TryCatch(async (req, res) => {
     expiresAt,
   });
 
-  // Clear cart only after successful order creation
-  await Cart.deleteMany(userIdQuery);
+  // Clear cart immediately for Cash on Delivery; for online payments, cart is cleared upon payment confirmation
+  if (paymentMethod === "cod") {
+    await Cart.deleteMany(userIdQuery);
+  }
 
   // Directly notify restaurant and user via Realtime socket
   emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
@@ -301,6 +327,9 @@ export const confirmRazorpayPayment = TryCatch(async (req, res) => {
     { new: true },
   );
   if (!order) return res.status(400).json({ message: "Payment does not match a pending order" });
+
+  // Clear customer cart upon verified payment
+  await Cart.deleteMany(getUserIdQuery(order.userId));
 
   emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
     orderId: order._id.toString(),
@@ -781,6 +810,9 @@ export const confirmStripePayment = TryCatch(async (req, res) => {
   );
 
   if (!order) return res.status(404).json({ message: "Order not found" });
+
+  // Clear customer cart upon verified payment
+  await Cart.deleteMany(getUserIdQuery(order.userId));
 
   emitRealtimeEvent("order:new", `restaurant:${order.restaurantId}`, {
     orderId: order._id.toString(),

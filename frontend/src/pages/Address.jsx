@@ -13,6 +13,7 @@ import L from "leaflet";
 import { LuLocateFixed } from "react-icons/lu";
 import { BiLoader, BiPlus, BiTrash } from "react-icons/bi";
 import { useAppData } from "../context/AppContext";
+import { getAuthToken } from "../utils/authStorage";
 
 // Fix leaflet marker icon issue
 delete L.Icon.Default.prototype._getIconUrl;
@@ -117,7 +118,7 @@ const AddAddressPage = () => {
     try {
       const { data } = await axios.get(`${restaurantService}/api/address/all`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${getAuthToken()}`,
         },
       });
       setAddresses(data || []);
@@ -157,7 +158,7 @@ const AddAddressPage = () => {
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            Authorization: `Bearer ${getAuthToken()}`,
           },
         },
       );
@@ -181,7 +182,7 @@ const AddAddressPage = () => {
       setDeletingId(id);
       await axios.delete(`${restaurantService}/api/address/${id}`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          Authorization: `Bearer ${getAuthToken()}`,
         },
       });
       toast.success("Address deleted");
