@@ -6,7 +6,6 @@ import Cart from "../models/Cart.js";
 import Order from "../models/Order.js";
 import Restaurant from "../models/Restaurant.js";
 import MenuItem from "../models/MenuItems.js";
-import { publishEvent } from "../config/order.publisher.js";
 
 const getUserIdQuery = (userId) => {
   if (!userId) return { userId: null };
@@ -232,18 +231,6 @@ export const createOrder = TryCatch(async (req, res) => {
     status: order.status,
   });
 
-  // Publish event asynchronously
-  try {
-    const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-    await publishOrderLifecycleEvent("ORDER_CREATED", {
-      orderId: order._id.toString(),
-      restaurantId: order.restaurantId,
-      userId: order.userId,
-    });
-  } catch (err) {
-    console.error("Failed to publish ORDER_CREATED event:", err);
-  }
-
   res.json({
     message: "Order created successfully",
     orderId: order._id.toString(),
@@ -426,19 +413,14 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
   order.status = status;
 
   let note = "";
-  let rabbitMQEvent = "";
   if (status === "accepted") {
     note = "Restaurant accepted your order.";
-    rabbitMQEvent = "RESTAURANT_ACCEPTED";
   } else if (status === "preparing") {
     note = "Food is being prepared.";
-    rabbitMQEvent = "ORDER_PREPARING";
   } else if (status === "ready_for_rider") {
     note = "Food is ready! Waiting for rider pickup.";
-    rabbitMQEvent = "ORDER_READY";
   } else if (status === "cancelled") {
     note = "Order was rejected or cancelled by the restaurant.";
-    rabbitMQEvent = "ORDER_CANCELLED";
   }
 
   order.timeline.push({
@@ -448,19 +430,6 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
   });
 
   await order.save();
-
-  if (rabbitMQEvent) {
-    try {
-      const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-      await publishOrderLifecycleEvent(rabbitMQEvent, {
-        orderId: order._id.toString(),
-        restaurantId: order.restaurantId,
-        userId: order.userId,
-      });
-    } catch (err) {
-      console.error(`Failed to publish event ${rabbitMQEvent}:`, err);
-    }
-  }
 
   await emitRealtimeEvent("order:update", `user:${order.userId}`, {
     orderId: order._id.toString(),
@@ -480,16 +449,6 @@ export const updateOrderStatus = TryCatch(async (req, res) => {
       restaurantId: restaurant._id.toString(),
       location: restaurant.autoLocation,
     });
-
-    try {
-      await publishEvent("ORDER_READY_FOR_RIDER", {
-        orderId: order._id.toString(),
-        restaurantId: restaurant._id.toString(),
-        location: restaurant.autoLocation,
-      });
-    } catch (err) {
-      console.warn("Publish ORDER_READY_FOR_RIDER warning:", err.message);
-    }
   }
 
   res.json({
@@ -638,18 +597,6 @@ export const assignRiderToOrder = TryCatch(async (req, res) => {
     { new: true },
   );
 
-  try {
-    const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-    await publishOrderLifecycleEvent("DRIVER_ASSIGNED", {
-      orderId: order._id.toString(),
-      restaurantId: order.restaurantId,
-      userId: order.userId,
-      riderId,
-    });
-  } catch (err) {
-    console.error("Failed to publish DRIVER_ASSIGNED event:", err);
-  }
-
   await axios.post(
     `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
     {
@@ -740,18 +687,6 @@ export const updateOrderStatusRider = TryCatch(async (req, res) => {
 
     await order.save();
 
-    try {
-      const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-      await publishOrderLifecycleEvent("ORDER_PICKED_UP", {
-        orderId: order._id.toString(),
-        restaurantId: order.restaurantId,
-        userId: order.userId,
-        riderId: order.riderId,
-      });
-    } catch (err) {
-      console.error("Failed to publish ORDER_PICKED_UP event:", err);
-    }
-
     await axios.post(
       `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
       {
@@ -794,18 +729,6 @@ export const updateOrderStatusRider = TryCatch(async (req, res) => {
     });
 
     await order.save();
-
-    try {
-      const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-      await publishOrderLifecycleEvent("ORDER_DELIVERED", {
-        orderId: order._id.toString(),
-        restaurantId: order.restaurantId,
-        userId: order.userId,
-        riderId: order.riderId,
-      });
-    } catch (err) {
-      console.error("Failed to publish ORDER_DELIVERED event:", err);
-    }
 
     await axios.post(
       `${process.env.REALTIME_SERVICE}/api/v1/internal/emit`,
@@ -869,17 +792,6 @@ export const confirmStripePayment = TryCatch(async (req, res) => {
     status: order.status,
     paymentStatus: "paid",
   });
-
-  try {
-    const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-    await publishOrderLifecycleEvent("ORDER_PAID", {
-      orderId: order._id.toString(),
-      restaurantId: order.restaurantId,
-      userId: order.userId,
-    });
-  } catch (pubErr) {
-    console.warn("Order paid publish warning:", pubErr.message);
-  }
 
   return res.json({ success: true, order });
 });

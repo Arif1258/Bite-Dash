@@ -12,21 +12,8 @@ import batchRoutes from "./routes/batch.js";
 import aiSupportRoutes from "./routes/aiSupport.js";
 import demandRoutes from "./routes/demandSuggestion.js";
 import cors from "cors";
-import { connectRabbitMQ } from "./config/rabbitmq.js";
-import { startPaymentConsumer } from "./config/payment.consumer.js";
-import { startOrderEventsConsumer } from "./config/orderEvents.consumer.js";
 
 dotenv.config();
-
-// RabbitMQ is optional — Vercel serverless has no persistent localhost broker.
-// The service will still handle HTTP routes when RabbitMQ is unavailable.
-try {
-  await connectRabbitMQ();
-  startPaymentConsumer();
-  startOrderEventsConsumer();
-} catch (err) {
-  console.warn("⚠️ RabbitMQ init skipped:", err.message);
-}
 
 const app = express();
 

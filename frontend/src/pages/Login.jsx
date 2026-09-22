@@ -6,6 +6,7 @@ import toast from "react-hot-toast";
 import { useGoogleLogin } from "@react-oauth/google";
 import { FcGoogle } from "react-icons/fc";
 import { useAppData } from "../context/AppContext";
+import { setAuthToken } from "../utils/authStorage";
 import { 
   Mail, Lock, User, Eye, EyeOff, ArrowRight, 
   ShieldCheck, Sparkles, Leaf, UtensilsCrossed, Bike, Store, MapPin, Phone, CreditCard, Award
@@ -91,7 +92,7 @@ const Login = () => {
         { timeout: 12000 }
       );
 
-      localStorage.setItem("token", result.data.token);
+      setAuthToken(result.data.token, result.data.user);
       toast.success(result.data.message || `Welcome to BiteDash ${currentRoleConfig.label}!`);
       setUser(result.data.user);
       setIsAuth(true);
@@ -192,7 +193,7 @@ const Login = () => {
           { timeout: 12000 }
         );
 
-        localStorage.setItem("token", data.token);
+        setAuthToken(data.token, data.user);
         setUser(data.user);
         setIsAuth(true);
         toast.success(data.message || `Signed in as ${currentRoleConfig.label}`);
@@ -221,7 +222,7 @@ const Login = () => {
           { timeout: 12000 }
         );
 
-        localStorage.setItem("token", data.token);
+        setAuthToken(data.token, data.user);
         setUser(data.user);
         setIsAuth(true);
         toast.success(data.message || `Account created as ${currentRoleConfig.label}!`);

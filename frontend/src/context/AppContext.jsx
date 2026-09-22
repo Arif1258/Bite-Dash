@@ -3,6 +3,16 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import { authService, restaurantService } from "../main";
 import { Toaster } from "react-hot-toast";
 import { useLocationPermission } from "../hooks/useLocationPermission";
+import { getAuthToken, setAuthToken, clearAuthToken, getCachedUser } from "../utils/authStorage";
+
+// Automatically attach current tab's auth token to all requests if not explicitly set
+axios.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token && !config.headers.Authorization) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
 
 const AppContext = createContext(undefined);
 
@@ -10,7 +20,7 @@ const CART_CACHE_KEY = "bitedash_cart_cache";
 
 const loadCachedCart = () => {
   try {
-    const raw = localStorage.getItem(CART_CACHE_KEY);
+    const raw = sessionStorage.getItem(CART_CACHE_KEY) || localStorage.getItem(CART_CACHE_KEY);
     if (!raw) return { cart: [], subTotal: 0, quauntity: 0 };
     const parsed = JSON.parse(raw);
     return {
@@ -24,8 +34,8 @@ const loadCachedCart = () => {
 };
 
 export const AppProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [isAuth, setIsAuth] = useState(false);
+  const [user, setUser] = useState(() => getCachedUser());
+  const [isAuth, setIsAuth] = useState(() => Boolean(getAuthToken()));
   const [loading, setLoading] = useState(true);
 
   // Hook-based robust location with Permissions API and caching
@@ -48,7 +58,7 @@ export const AppProvider = ({ children }) => {
 
   const fetchUser = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getAuthToken();
 
       if (!token) {
         setUser(null);
@@ -56,6 +66,7 @@ export const AppProvider = ({ children }) => {
         setCart([]);
         setSubTotal(0);
         setQuauntity(0);
+        sessionStorage.removeItem(CART_CACHE_KEY);
         localStorage.removeItem(CART_CACHE_KEY);
         return;
       }
@@ -69,11 +80,13 @@ export const AppProvider = ({ children }) => {
 
       setUser(data);
       setIsAuth(true);
+      setAuthToken(token, data);
     } catch (error) {
       console.log("Auth check error:", error?.message);
       // Clean up invalid or expired token
       if (error.response?.status === 401 || error.response?.status === 403) {
-        localStorage.removeItem("token");
+        clearAuthToken();
+        sessionStorage.removeItem(CART_CACHE_KEY);
         localStorage.removeItem(CART_CACHE_KEY);
         setUser(null);
         setIsAuth(false);
@@ -87,11 +100,12 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const fetchCart = useCallback(async () => {
-    const token = localStorage.getItem("token");
+    const token = getAuthToken();
     if (!token) {
       setCart([]);
       setSubTotal(0);
       setQuauntity(0);
+      sessionStorage.removeItem(CART_CACHE_KEY);
       localStorage.removeItem(CART_CACHE_KEY);
       return;
     }
@@ -99,6 +113,7 @@ export const AppProvider = ({ children }) => {
       setCart([]);
       setSubTotal(0);
       setQuauntity(0);
+      sessionStorage.removeItem(CART_CACHE_KEY);
       localStorage.removeItem(CART_CACHE_KEY);
       return;
     }
@@ -120,10 +135,9 @@ export const AppProvider = ({ children }) => {
       setQuauntity(newQty);
 
       try {
-        localStorage.setItem(
-          CART_CACHE_KEY,
-          JSON.stringify({ cart: newCart, subTotal: newSubTotal, quauntity: newQty }),
-        );
+        const payload = JSON.stringify({ cart: newCart, subTotal: newSubTotal, quauntity: newQty });
+        sessionStorage.setItem(CART_CACHE_KEY, payload);
+        localStorage.setItem(CART_CACHE_KEY, payload);
       } catch (e) {
         console.warn("Failed to update cart cache:", e);
       }
@@ -135,11 +149,11 @@ export const AppProvider = ({ children }) => {
     }
   }, [user]);
 
-  // Centralized logout that sanitizes all global states and storage
+  // Centralized logout that sanitizes all global states and storage for current tab
   const logout = useCallback(() => {
-    localStorage.removeItem("token");
+    clearAuthToken();
+    sessionStorage.removeItem(CART_CACHE_KEY);
     localStorage.removeItem(CART_CACHE_KEY);
-    sessionStorage.clear();
     setUser(null);
     setIsAuth(false);
     setCart([]);

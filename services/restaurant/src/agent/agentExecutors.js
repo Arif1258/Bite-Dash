@@ -1039,18 +1039,6 @@ export async function executeCreateOrder(userId, { paymentMethod = "cod", addres
   await Cart.deleteMany(userQuery);
   await clearUserAppliedCoupon(userId);
 
-  // Publish event asynchronously to RabbitMQ
-  try {
-    const { publishOrderLifecycleEvent } = await import("../config/order.publisher.js");
-    await publishOrderLifecycleEvent("ORDER_CREATED", {
-      orderId: order._id.toString(),
-      restaurantId: order.restaurantId,
-      userId: order.userId,
-    });
-  } catch (err) {
-    // Non-blocking
-  }
-
   const shortId = order._id.toString().slice(-6).toUpperCase();
   const eta = await getDetailedETA(order);
 

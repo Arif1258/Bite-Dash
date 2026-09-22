@@ -3,6 +3,8 @@ import { io } from "socket.io-client";
 import { useAppData } from "./AppContext";
 import { realtimeService } from "../main";
 
+import { getAuthToken } from "../utils/authStorage";
+
 const SocketContext = createContext({ socket: null });
 
 export const SocketProvider = ({ children }) => {
@@ -25,7 +27,7 @@ export const SocketProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const token = getAuthToken();
 
     if (!isAuth || !token || !user) {
       if (socketRef.current) {

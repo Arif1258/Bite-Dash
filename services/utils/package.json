@@ -13,9 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/amqplib": "^0.10.8",
     "@types/axios": "^0.14.4",
-    "amqplib": "^0.10.9",
     "axios": "^1.13.4",
     "cloudinary": "^2.9.0",
     "cors": "^2.8.6",

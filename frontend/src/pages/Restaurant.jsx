@@ -12,6 +12,8 @@ import RestaurantOrders from "../components/RestaurantOrders";
 import RestaurantSurplus from "../components/RestaurantSurplus";
 import DemandSuggestions from "../components/DemandSuggestions";
 
+import { setAuthToken } from "../utils/authStorage";
+
 const Restaurant = () => {
   const { logout } = useAppData();
   const [restaurant, setRestaurant] = useState(null);
@@ -32,7 +34,7 @@ const Restaurant = () => {
       setRestaurant(data.restaurant || null);
 
       if (data.token) {
-        localStorage.setItem("token", data.token);
+        setAuthToken(data.token);
         window.location.reload();
       }
     } catch (error) {

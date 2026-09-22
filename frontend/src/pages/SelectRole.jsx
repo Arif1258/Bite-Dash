@@ -3,6 +3,7 @@ import { useAppData } from "../context/AppContext";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { authService } from "../main";
+import { setAuthToken } from "../utils/authStorage";
 
 const SelectRole = () => {
   const [role, setRole] = useState(null);
@@ -23,7 +24,7 @@ const SelectRole = () => {
         },
       );
 
-      localStorage.setItem("token", data.token);
+      setAuthToken(data.token, data.user);
       setUser(data.user);
 
       navigate("/", { replace: true });

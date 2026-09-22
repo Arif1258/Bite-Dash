@@ -1,7 +1,6 @@
 import axios from "axios";
 import { razorpay } from "../config/razorpay.js";
 import { verifyRazorpaySignature } from "../config/verifyRazorpay.js";
-import { publishPaymentSuccess } from "../config/payment.producer.js";
 
 export const createRazorpayOrder = async (req, res) => {
   const { orderId } = req.body;
@@ -62,12 +61,6 @@ export const verifyRazorpayPayment = async (req, res) => {
     },
     { headers: { "x-internal-key": process.env.INTERNAL_SERVICE_KEY } },
   );
-
-  await publishPaymentSuccess({
-    orderId,
-    paymentId: razorpay_payment_id,
-    provider: "razorpay",
-  });
 
   res.json({
     message: "Payment verified successfully",
@@ -166,12 +159,6 @@ export const verifyStripe = async (req, res) => {
     } catch (httpErr) {
       console.warn("⚠️ Direct HTTP stripe confirmation warning:", httpErr.message);
     }
-
-    await publishPaymentSuccess({
-      orderId,
-      paymentId: sessionId,
-      provider: "stripe",
-    });
 
     res.json({
       message: "payment verified successfully",

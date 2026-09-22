@@ -4,14 +4,8 @@ import cloudinary from "cloudinary";
 import cors from "cors";
 import uploadRoutes from "./routes/cloudinary.js";
 import paymentRoutes from "./routes/payment.js";
-import { connectRabbitMQ } from "./config/rabbitmq.js";
 
 dotenv.config();
-
-// RabbitMQ is optional — Vercel serverless has no persistent localhost broker.
-connectRabbitMQ().catch((err) =>
-  console.warn("⚠️ RabbitMQ init skipped:", err.message)
-);
 
 const app = express();
 

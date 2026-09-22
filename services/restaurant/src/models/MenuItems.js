@@ -36,4 +36,7 @@ const schema = new Schema(
   },
 );
 
+schema.index({ restaurantId: 1, isAvailable: 1 });
+schema.index({ name: "text", description: "text" });
+
 export default mongoose.model("MenuItem", schema);

@@ -1,6 +1,4 @@
-import { getRedisClient } from "../utils/redis.js";
-
-// In-memory fallback if Redis is unavailable
+// In-memory store for applied coupons per user with TTL
 const memoryCouponStore = new Map();
 
 export const AVAILABLE_COUPONS = [
@@ -122,23 +120,17 @@ export function validateCoupon(code, subtotal = 0) {
 }
 
 /**
- * Gets currently applied coupon for user from Redis or fallback memory.
+ * Gets currently applied coupon for user from memory store.
  */
 export async function getUserAppliedCoupon(userId) {
   if (!userId) return null;
-  const key = `bitedash:cart:coupon:${userId}`;
-
-  try {
-    const redis = getRedisClient();
-    if (redis) {
-      const data = await redis.get(key);
-      return data ? JSON.parse(data) : null;
-    }
-  } catch (err) {
-    console.warn("Redis coupon get warning:", err.message);
+  const record = memoryCouponStore.get(userId.toString());
+  if (!record) return null;
+  if (record.expiresAt && record.expiresAt < Date.now()) {
+    memoryCouponStore.delete(userId.toString());
+    return null;
   }
-
-  return memoryCouponStore.get(userId.toString()) || null;
+  return record.data || record;
 }
 
 /**
@@ -146,19 +138,10 @@ export async function getUserAppliedCoupon(userId) {
  */
 export async function setUserAppliedCoupon(userId, couponData) {
   if (!userId) return;
-  const key = `bitedash:cart:coupon:${userId}`;
-
-  try {
-    const redis = getRedisClient();
-    if (redis) {
-      await redis.set(key, JSON.stringify(couponData), "EX", 7200);
-      return;
-    }
-  } catch (err) {
-    console.warn("Redis coupon set warning:", err.message);
-  }
-
-  memoryCouponStore.set(userId.toString(), couponData);
+  memoryCouponStore.set(userId.toString(), {
+    data: couponData,
+    expiresAt: Date.now() + 2 * 60 * 60 * 1000,
+  });
 }
 
 /**
@@ -166,17 +149,5 @@ export async function setUserAppliedCoupon(userId, couponData) {
  */
 export async function clearUserAppliedCoupon(userId) {
   if (!userId) return;
-  const key = `bitedash:cart:coupon:${userId}`;
-
-  try {
-    const redis = getRedisClient();
-    if (redis) {
-      await redis.del(key);
-      return;
-    }
-  } catch (err) {
-    console.warn("Redis coupon clear warning:", err.message);
-  }
-
   memoryCouponStore.delete(userId.toString());
 }

@@ -4,7 +4,7 @@ import Address from "../models/Address.js";
 import Order from "../models/Order.js";
 import TryCatch from "../middlewares/trycatch.js";
 import { getDetailedETA } from "../services/etaService.js";
-import { publishEvent } from "../config/order.publisher.js";
+import { emitRealtimeEvent } from "./order.js";
 import axios from "axios";
 
 // Proximity distance calculation helper
@@ -381,15 +381,11 @@ export const purchaseSurplusItem = TryCatch(async (req, res) => {
 
   const etaDetails = await getDetailedETA(order);
 
-  try {
-    await publishEvent("order_created", {
-      orderId: order._id,
-      userId: user._id,
-      restaurantId: restaurant._id,
-    });
-  } catch (pubErr) {
-    console.warn("Surplus order event publish warning:", pubErr.message);
-  }
+  await emitRealtimeEvent("order:new", `restaurant:${restaurant._id}`, {
+    orderId: order._id.toString(),
+    userId: user._id.toString(),
+    status: order.status,
+  });
 
   res.status(201).json({
     success: true,

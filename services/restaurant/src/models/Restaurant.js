@@ -71,5 +71,7 @@ const schema = new Schema(
 );
 
 schema.index({ autoLocation: "2dsphere" });
+schema.index({ ownerId: 1 });
+schema.index({ isVerified: 1, isOpen: 1 });
 
 export default mongoose.model("Restaurant", schema);
