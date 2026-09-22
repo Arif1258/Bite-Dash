@@ -30,6 +30,19 @@ const schema = new Schema(
       type: Boolean,
       default: true,
     },
+    category: {
+      type: String,
+      trim: true,
+      index: true,
+    },
+    isSpicy: {
+      type: Boolean,
+      default: false,
+    },
+    isVegetarian: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
@@ -37,6 +50,6 @@ const schema = new Schema(
 );
 
 schema.index({ restaurantId: 1, isAvailable: 1 });
-schema.index({ name: "text", description: "text" });
+schema.index({ name: "text", description: "text", category: "text" });
 
 export default mongoose.model("MenuItem", schema);

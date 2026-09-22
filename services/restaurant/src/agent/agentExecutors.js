@@ -87,28 +87,56 @@ export async function executeSearchRestaurants({ query, cuisine, vegetarianOnly,
   };
 }
 
-export async function executeSearchMenuItems({ query, maxPrice, vegetarianOnly, restaurantId, limit = 6 }) {
+export async function executeSearchMenuItems({
+  query,
+  category,
+  maxPrice,
+  minPrice,
+  vegetarianOnly,
+  isSpicy,
+  restaurantId,
+  sortBy = "price_asc",
+  limit = 6,
+}) {
   const maxLimit = Math.min(Number(limit) || 6, 12);
   const filter = { isAvailable: { $ne: false } };
 
   if (query && typeof query === "string" && query.trim()) {
+    const clean = query.trim();
     filter.$or = [
-      { name: { $regex: query.trim(), $options: "i" } },
-      { description: { $regex: query.trim(), $options: "i" } },
+      { name: { $regex: clean, $options: "i" } },
+      { description: { $regex: clean, $options: "i" } },
+      { category: { $regex: clean, $options: "i" } },
     ];
   }
 
+  if (category && typeof category === "string" && category.trim()) {
+    filter.category = { $regex: category.trim(), $options: "i" };
+  }
+
   if (maxPrice && !isNaN(maxPrice)) {
-    filter.price = { $lte: Number(maxPrice) };
+    filter.price = { ...(filter.price || {}), $lte: Number(maxPrice) };
+  }
+  if (minPrice && !isNaN(minPrice)) {
+    filter.price = { ...(filter.price || {}), $gte: Number(minPrice) };
+  }
+  if (vegetarianOnly) {
+    filter.isVegetarian = true;
+  }
+  if (isSpicy) {
+    filter.isSpicy = true;
   }
 
   if (restaurantId && mongoose.Types.ObjectId.isValid(restaurantId)) {
     filter.restaurantId = new mongoose.Types.ObjectId(restaurantId);
   }
 
+  let sortOption = { price: 1 };
+  if (sortBy === "price_desc") sortOption = { price: -1 };
+
   const items = await MenuItem.find(filter)
     .populate("restaurantId", "name isOpen averagePrepTime reliabilityScore autoLocation")
-    .sort({ price: 1 })
+    .sort(sortOption)
     .limit(maxLimit)
     .lean();
 
@@ -119,13 +147,25 @@ export async function executeSearchMenuItems({ query, maxPrice, vegetarianOnly, 
       name: i.name,
       description: i.description || "",
       price: i.price,
+      category: i.category || "General",
+      isSpicy: !!i.isSpicy,
+      isVegetarian: !!i.isVegetarian,
       restaurantId: rest._id ? rest._id.toString() : "",
       restaurantName: rest.name || "BiteDash Kitchen",
+      restaurantRating: rest.reliabilityScore ? (rest.reliabilityScore / 20).toFixed(1) : "4.5",
+      reliabilityScore: rest.reliabilityScore || 90,
+      prepTime: `${rest.averagePrepTime || 20} mins`,
       isAvailable: i.isAvailable !== false,
       isOpen: rest.isOpen !== false,
       image: i.image,
     };
   });
+
+  if (sortBy === "rating") {
+    formatted.sort((a, b) => (b.reliabilityScore || 0) - (a.reliabilityScore || 0));
+  } else if (sortBy === "speed") {
+    formatted.sort((a, b) => parseInt(a.prepTime, 10) - parseInt(b.prepTime, 10));
+  }
 
   return {
     found: formatted.length > 0,
@@ -1127,6 +1167,7 @@ export async function dispatchAgentTool(toolName, args, userId) {
     case "searchRestaurants":
       return await executeSearchRestaurants(args || {});
     case "searchMenuItems":
+    case "searchFoodItems":
       return await executeSearchMenuItems(args || {});
     case "getRestaurantDetails":
       return await executeGetRestaurantDetails(args || {});
@@ -1135,10 +1176,13 @@ export async function dispatchAgentTool(toolName, args, userId) {
     case "getFoodItemDetails":
       return await executeGetFoodItemDetails(args || {});
     case "getCart":
+    case "getUserCart":
       return await executeGetCart(userId);
     case "addToCart":
+    case "addItemToCart":
       return await executeAddToCart(userId, args || {});
     case "removeFromCart":
+    case "removeItemFromCart":
       return await executeRemoveFromCart(userId, args || {});
     case "updateCartQuantity":
       return await executeUpdateCartQuantity(userId, args || {});

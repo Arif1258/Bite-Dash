@@ -16,7 +16,7 @@ You can understand natural-language food requests, discover restaurants, inspect
 CRITICAL OPERATIONAL RULES:
 1. AUTHENTICATION & TRUTH:
    - You interact with real backend tools. Scoped strictly to the authenticated user.
-   - NEVER fabricate restaurants, dishes, prices, ratings, or delivery times. Always call tools (searchRestaurants, searchMenuItems, getCart, getOrderETA, etc.) to get ground truth.
+   - NEVER fabricate restaurants, dishes, prices, ratings, or delivery times. Always call tools (searchRestaurants, searchMenuItems, searchFoodItems, getCart, getOrderETA, etc.) to get ground truth.
    - Prices are in ₹ (Indian Rupee).
 
 2. CART CONTROL:
@@ -25,7 +25,7 @@ CRITICAL OPERATIONAL RULES:
    - BiteDash enforces a single-restaurant cart rule. If addToCart reports a restaurant conflict, explain politely and ask if they'd like to clear the cart first.
 
 3. CONTEXTUAL RESOLUTION:
-   - Understand references to previous messages: "the first one", "those", "add another", "remove it", "the second restaurant".
+   - Understand references to previous messages: "the first one", "those", "add another", "remove it", "the cheapest", "the second restaurant".
    - Map these to the corresponding item ID or restaurant ID from the conversation context.
 
 4. CHECKOUT SAFETY & CONFIRMATION:
@@ -45,12 +45,16 @@ CRITICAL OPERATIONAL RULES:
 const ACTION_MAP = {
   searchRestaurants: "🔎 Searching restaurants...",
   searchMenuItems: "🍔 Checking menu items...",
+  searchFoodItems: "🍽️ Searching BiteDash dishes...",
   getRestaurantDetails: "🏬 Fetching restaurant details...",
   getMenu: "📜 Reading menu...",
   getFoodItemDetails: "🍽️ Inspecting dish...",
   getCart: "🛒 Fetching your cart...",
+  getUserCart: "🛒 Fetching your cart...",
   addToCart: "🛒 Adding to your cart...",
+  addItemToCart: "🛒 Adding to your cart...",
   removeFromCart: "🛒 Removing from cart...",
+  removeItemFromCart: "🛒 Removing from cart...",
   updateCartQuantity: "🛒 Updating quantity...",
   clearCart: "🗑️ Clearing cart...",
   getAvailableCoupons: "🎟️ Checking available offers...",
@@ -70,25 +74,34 @@ const ACTION_MAP = {
  * Main chat handler for the agentic assistant
  */
 export async function runAgentChat({ userId, message, history = [] }) {
+  const startTime = Date.now();
+
   if (!userId) {
     return {
       reply: "Please log in to your BiteDash account to interact with your personal AI food copilot.",
       cards: [],
       mode: "unauthorized",
+      metadata: { intent: "UNAUTHORIZED", executionTimeMs: 0 },
     };
   }
 
   const apiKey = process.env.OPENAI_API_KEY;
 
-  // If no OpenAI key, use Deterministic Backend Execution Engine
+  // If no valid OpenAI key, use Semantic RAG Execution Engine
   if (!apiKey || apiKey === "your_openai_api_key_here") {
     const result = await executeDeterministicAgent(userId, message, history);
     return {
       reply: result.reply,
       cards: result.cards || [],
       action: result.action || "Completed",
+      actions: [result.action || "Processed request"],
       cartUpdated: !!result.cartUpdated,
-      mode: "deterministic_engine",
+      mode: "semantic_rag_engine",
+      metadata: result.metadata || {
+        intent: "PROCESSED",
+        mode: "semantic_rag_engine",
+        executionTimeMs: Date.now() - startTime,
+      },
     };
   }
 
@@ -96,7 +109,6 @@ export async function runAgentChat({ userId, message, history = [] }) {
     const openai = new OpenAI({ apiKey });
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
-    // Format conversation messages
     const formattedMessages = [
       { role: "system", content: SYSTEM_INSTRUCTION },
     ];
@@ -121,8 +133,8 @@ export async function runAgentChat({ userId, message, history = [] }) {
     const collectedCards = [];
     const actionsTaken = [];
     let cartUpdated = false;
+    let lastToolName = "conversation";
 
-    // OpenAI Tool Calling Loop (up to 5 iterations)
     let iterations = 0;
     let currentMessages = [...formattedMessages];
 
@@ -142,19 +154,27 @@ export async function runAgentChat({ userId, message, history = [] }) {
 
       // Check if tool calls were requested
       if (!responseMessage.tool_calls || responseMessage.tool_calls.length === 0) {
-        // Final text response reached
+        const executionTimeMs = Date.now() - startTime;
         return {
           reply: responseMessage.content || "I have updated your request.",
           cards: collectedCards,
           actions: actionsTaken,
           cartUpdated,
           mode: "openai_agentic_tool_calling",
+          metadata: {
+            intent: "OPENAI_FUNCTION_CALLING",
+            tool: lastToolName,
+            retrievedCount: collectedCards.length,
+            executionTimeMs,
+            mode: "openai_agentic_tool_calling",
+          },
         };
       }
 
       // Execute requested tools
       for (const toolCall of responseMessage.tool_calls) {
         const functionName = toolCall.function.name;
+        lastToolName = functionName;
         let functionArgs = {};
         try {
           functionArgs = JSON.parse(toolCall.function.arguments || "{}");
@@ -166,7 +186,7 @@ export async function runAgentChat({ userId, message, history = [] }) {
         actionsTaken.push(actionText);
 
         if (
-          ["addToCart", "removeFromCart", "updateCartQuantity", "clearCart", "applyCoupon", "reorderPreviousOrder", "createOrder"].includes(
+          ["addToCart", "addItemToCart", "removeFromCart", "removeItemFromCart", "updateCartQuantity", "clearCart", "applyCoupon", "reorderPreviousOrder", "createOrder"].includes(
             functionName
           )
         ) {
@@ -191,23 +211,36 @@ export async function runAgentChat({ userId, message, history = [] }) {
       }
     }
 
-    // Fallback if loop exceeded max iterations
+    const executionTimeMs = Date.now() - startTime;
     return {
       reply: "I've processed your food request. Let me know if you'd like to make any changes!",
       cards: collectedCards,
       actions: actionsTaken,
       cartUpdated,
       mode: "openai_agentic_tool_calling",
+      metadata: {
+        intent: "OPENAI_FUNCTION_CALLING",
+        tool: lastToolName,
+        retrievedCount: collectedCards.length,
+        executionTimeMs,
+        mode: "openai_agentic_tool_calling",
+      },
     };
   } catch (err) {
-    console.warn("⚠️ OpenAI Agent error, falling back to Deterministic Engine:", err.message);
+    console.warn("⚠️ OpenAI Agent error, falling back to Semantic RAG Engine:", err.message);
     const fallbackResult = await executeDeterministicAgent(userId, message, history);
     return {
       reply: fallbackResult.reply,
       cards: fallbackResult.cards || [],
-      action: fallbackResult.action || "Completed via fallback",
+      action: fallbackResult.action || "Completed via Semantic Engine",
+      actions: [fallbackResult.action || "Completed via Semantic Engine"],
       cartUpdated: !!fallbackResult.cartUpdated,
-      mode: "deterministic_fallback",
+      mode: "semantic_rag_engine",
+      metadata: fallbackResult.metadata || {
+        intent: "SEMANTIC_RAG_FALLBACK",
+        mode: "semantic_rag_engine",
+        executionTimeMs: Date.now() - startTime,
+      },
     };
   }
 }

@@ -34,5 +34,6 @@ export const aiSupportChat = TryCatch(async (req, res) => {
     actions: result.actions || (result.action ? [result.action] : []),
     cartUpdated: !!result.cartUpdated,
     mode: result.mode,
+    metadata: result.metadata || null,
   });
 });

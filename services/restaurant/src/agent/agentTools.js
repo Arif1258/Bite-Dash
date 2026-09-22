@@ -54,6 +54,10 @@ export const agentTools = [
             type: "string",
             description: "Food name or term (e.g. 'chicken biryani', 'margherita pizza', 'french fries', 'spicy burger')",
           },
+          category: {
+            type: "string",
+            description: "Category of dish (e.g. 'Biryani', 'Pizza', 'Burger', 'Beverages')",
+          },
           maxPrice: {
             type: "number",
             description: "Maximum item price in ₹ (Indian Rupee), e.g. 250, 300, 500",
@@ -61,6 +65,10 @@ export const agentTools = [
           vegetarianOnly: {
             type: "boolean",
             description: "Whether to return only vegetarian dishes",
+          },
+          isSpicy: {
+            type: "boolean",
+            description: "Whether to filter for spicy dishes",
           },
           restaurantId: {
             type: "string",
@@ -71,7 +79,40 @@ export const agentTools = [
             description: "Maximum items to return (default: 6, max: 12)",
           },
         },
-        required: ["query"],
+      },
+    },
+  },
+
+  {
+    type: "function",
+    function: {
+      name: "searchFoodItems",
+      description:
+        "Search and discover food dishes and items by name, category, price limit, spice level, or vegetarian focus. Grounded directly in BiteDash's real restaurant menus.",
+      parameters: {
+        type: "object",
+        properties: {
+          query: {
+            type: "string",
+            description: "Food name or term (e.g. 'biryani', 'burger', 'coke')",
+          },
+          maxPrice: {
+            type: "number",
+            description: "Maximum item price in ₹ (Indian Rupee)",
+          },
+          vegetarianOnly: {
+            type: "boolean",
+            description: "Filter for vegetarian food items",
+          },
+          isSpicy: {
+            type: "boolean",
+            description: "Filter for spicy dishes",
+          },
+          limit: {
+            type: "number",
+            description: "Maximum number of dishes to return",
+          },
+        },
       },
     },
   },

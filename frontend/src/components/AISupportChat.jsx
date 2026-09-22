@@ -4,7 +4,8 @@ import { restaurantService } from "../main";
 import { useAppData } from "../context/AppContext";
 import { 
   Bot, Send, X, Sparkles, ShoppingBag, 
-  Tag, CheckCircle2, ChevronRight, Minimize2, ArrowRight 
+  Tag, CheckCircle2, ChevronRight, Minimize2, ArrowRight,
+  Terminal, ShieldCheck, Activity, Cpu, Database, ChevronDown, ChevronUp
 } from "lucide-react";
 import { 
   FoodCard, RestaurantCard, CartCard, OrderCard, CouponCard 
@@ -12,20 +13,37 @@ import {
 import toast from "react-hot-toast";
 import { getAuthToken } from "../utils/authStorage";
 
+const ACTION_STEPS = [
+  "🔎 Understanding your request...",
+  "🍽️ Searching BiteDash...",
+  "📍 Finding available restaurants...",
+  "💰 Checking your budget...",
+  "🛒 Updating your cart...",
+  "📦 Checking your order...",
+];
+
 const AISupportChat = ({ orderId, isFloating = false }) => {
   const { user, fetchCart } = useAppData();
   const [messages, setMessages] = useState([
     {
       role: "model",
-      text: "👋 Hi! I'm **BiteDash AI Copilot**.\n\nI can help you discover delicious meals, add food to your cart, apply verified promo coupons, explain live order ETAs, or reorder past favorites.\n\nWhat are you craving today?",
+      text: "Hey! I'm your **BiteDash AI Copilot** 👋\n\nI can search food, discover restaurants, manage your cart, track orders, find deals, and help you decide what to eat.\n\nTry clicking any suggestion below or ask me naturally!",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       cards: [],
+      chips: [
+        { label: "🍛 Find biryani under ₹300", prompt: "Find biryani under ₹300" },
+        { label: "🍕 Highly rated pizza", prompt: "Find pizza from a highly rated restaurant" },
+        { label: "🛒 What's in my cart?", prompt: "What's in my cart?" },
+        { label: "📦 Where is my order?", prompt: "Where is my order?" },
+        { label: "🎟️ Best available discount", prompt: "Find me the best available discount" },
+      ],
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [currentAction, setCurrentAction] = useState(null);
   const [isOpen, setIsOpen] = useState(!isFloating);
+  const [showObservability, setShowObservability] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -45,6 +63,17 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     return () => window.removeEventListener("open-ai-support", handleOpenAi);
   }, []);
 
+  // Cycle action status messages while loading
+  useEffect(() => {
+    if (!loading) return;
+    let stepIndex = 0;
+    const interval = setInterval(() => {
+      stepIndex = (stepIndex + 1) % ACTION_STEPS.length;
+      setCurrentAction(ACTION_STEPS[stepIndex]);
+    }, 1200);
+    return () => clearInterval(interval);
+  }, [loading]);
+
   const quickPrompts = [
     "Find biryani under ₹300",
     "What's in my cart?",
@@ -55,7 +84,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
 
   const handleAddToCart = async (itemId, restaurantId, name) => {
     try {
-      const { data } = await axios.post(
+      await axios.post(
         `${restaurantService}/api/cart/add`,
         { restaurantId, itemId },
         {
@@ -64,7 +93,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
           },
         }
       );
-      toast.success(`Added ${name || "item"} to your cart! 🛒`);
+      toast.success(`Added ${name || "dish"} to your cart! 🛒`);
       await fetchCart();
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to add item to cart");
@@ -88,7 +117,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
-    setCurrentAction("Processing your request...");
+    setCurrentAction(ACTION_STEPS[0]);
 
     try {
       const historyPayload = messages
@@ -117,7 +146,6 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
         }
       );
 
-      // If action steps returned, show the final one
       if (Array.isArray(data.actions) && data.actions.length > 0) {
         setCurrentAction(data.actions[data.actions.length - 1]);
       }
@@ -127,11 +155,12 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
         text: data.reply || data.message || "I've updated your request.",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         cards: Array.isArray(data.cards) ? data.cards : [],
+        metadata: data.metadata || null,
+        mode: data.mode || "agentic",
       };
 
       setMessages((prev) => [...prev, botReply]);
 
-      // If backend modified the cart, trigger global cart synchronization immediately
       if (data.cartUpdated) {
         await fetchCart();
       }
@@ -160,7 +189,6 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     lastMessage?.role === "model" &&
     lastMessage?.text?.includes("Would you like me to place the order?");
 
-  // If floating and closed, render the floating trigger button
   if (isFloating && !isOpen) {
     return (
       <button
@@ -178,13 +206,13 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
   }
 
   const containerClasses = isFloating
-    ? "fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[440px] h-[620px] max-h-[88vh] rounded-3xl shadow-2xl border border-slate-200/90 bg-white flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
-    : "w-full h-[560px] rounded-3xl border border-slate-200/90 bg-white flex flex-col overflow-hidden shadow-sm";
+    ? "fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[460px] h-[640px] max-h-[88vh] rounded-3xl shadow-2xl border border-slate-200/90 bg-white flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
+    : "w-full h-[600px] rounded-3xl border border-slate-200/90 bg-white flex flex-col overflow-hidden shadow-sm";
 
   return (
     <div className={containerClasses}>
       {/* Chat Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 flex items-center justify-between border-b border-white/10 shadow-sm">
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-3.5 flex items-center justify-between border-b border-white/10 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="h-10 w-10 bg-gradient-to-tr from-red-500 via-rose-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/20 ring-2 ring-white/10">
@@ -197,22 +225,37 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-white">BiteDash Copilot</h3>
               <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-400/30">
-                Agentic Tools
+                GenAI &bull; RAG
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">Conversational Discovery &amp; Real Cart Actions</p>
+            <p className="text-[11px] text-slate-400 font-medium">Conversational Discovery &amp; Live Telemetry</p>
           </div>
         </div>
 
-        {isFloating && (
+        <div className="flex items-center gap-1.5">
           <button
-            onClick={() => setIsOpen(false)}
-            className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
-            aria-label="Close chat"
+            onClick={() => setShowObservability(!showObservability)}
+            title="Toggle Developer & Teacher Observability View"
+            className={`px-2 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1 transition cursor-pointer border ${
+              showObservability
+                ? "bg-indigo-600 text-white border-indigo-500"
+                : "bg-slate-800/80 text-slate-300 hover:text-white border-slate-700 hover:bg-slate-700"
+            }`}
           >
-            <X className="w-4 h-4" />
+            <Activity className="w-3 h-3 text-indigo-400" />
+            <span>Telemetry</span>
           </button>
-        )}
+
+          {isFloating && (
+            <button
+              onClick={() => setIsOpen(false)}
+              className="h-8 w-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center transition cursor-pointer"
+              aria-label="Close chat"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Quick Actions Carousel */}
@@ -237,13 +280,67 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
             className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
             <div
-              className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs ${
+              className={`max-w-[92%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs ${
                 msg.role === "user"
                   ? "bg-red-600 text-white rounded-br-none"
                   : "bg-white text-slate-800 rounded-bl-none border border-slate-200/80"
               }`}
             >
               <div className="whitespace-pre-wrap">{msg.text}</div>
+
+              {/* Suggestion Chips in Welcome message */}
+              {Array.isArray(msg.chips) && msg.chips.length > 0 && (
+                <div className="mt-3 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                  {msg.chips.map((chip, chipIdx) => (
+                    <button
+                      key={chipIdx}
+                      onClick={() => sendMessage(chip.prompt)}
+                      disabled={loading}
+                      className="text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-full px-2.5 py-1 transition shadow-2xs cursor-pointer text-left flex items-center gap-1"
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Observability / Teacher Debug view badge */}
+              {showObservability && msg.metadata && (
+                <div className="mt-2.5 p-2.5 bg-slate-900 text-slate-200 rounded-xl text-[10px] font-mono border border-slate-800 space-y-1 shadow-sm">
+                  <div className="flex items-center justify-between text-indigo-400 font-bold border-b border-slate-800 pb-1">
+                    <span className="flex items-center gap-1">
+                      <Cpu className="w-3 h-3" /> GenAI / RAG Execution
+                    </span>
+                    <span className="text-[9px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-300">
+                      {msg.metadata.executionTimeMs || 0}ms
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 pt-0.5">
+                    <div>
+                      <span className="text-slate-500">Intent: </span>
+                      <span className="text-emerald-400 font-semibold">{msg.metadata.intent}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Tool: </span>
+                      <span className="text-amber-300 font-semibold">{msg.metadata.tool}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Mode: </span>
+                      <span className="text-blue-300">{msg.metadata.mode || "semantic_rag"}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Retrieved: </span>
+                      <span className="text-violet-300 font-semibold">{msg.metadata.retrievedCount || 0} records</span>
+                    </div>
+                  </div>
+                  {msg.metadata.filters && Object.keys(msg.metadata.filters).length > 0 && (
+                    <div className="text-slate-400 pt-0.5">
+                      <span className="text-slate-500">Filters: </span>
+                      <span>{JSON.stringify(msg.metadata.filters)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Render interactive cards attached to model messages */}
               {Array.isArray(msg.cards) && msg.cards.length > 0 && (
@@ -338,7 +435,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder='Ask: "Find spicy biryani under 300", "Apply coupon"...'
+            placeholder='Ask: "Find biryani under 300", "Where is my order?"...'
             className="flex-1 bg-slate-50 border border-slate-200 focus:border-red-500 focus:bg-white text-xs rounded-xl px-3.5 py-2.5 outline-none transition placeholder:text-slate-400"
           />
           <button
