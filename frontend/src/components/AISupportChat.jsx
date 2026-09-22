@@ -3,21 +3,27 @@ import axios from "axios";
 import { restaurantService } from "../main";
 import { useAppData } from "../context/AppContext";
 import { 
-  Bot, Send, X, Sparkles, Clock, Package, 
-  MapPin, HelpCircle, ChevronRight, MessageSquare, ShieldCheck, Minimize2 
+  Bot, Send, X, Sparkles, ShoppingBag, 
+  Tag, CheckCircle2, ChevronRight, Minimize2, ArrowRight 
 } from "lucide-react";
+import { 
+  FoodCard, RestaurantCard, CartCard, OrderCard, CouponCard 
+} from "./AgentCards";
+import toast from "react-hot-toast";
 
 const AISupportChat = ({ orderId, isFloating = false }) => {
-  const { user } = useAppData();
+  const { user, fetchCart } = useAppData();
   const [messages, setMessages] = useState([
     {
       role: "model",
-      text: "👋 Hi! I'm **BiteDash AI Order Assistant**.\n\nPowered by live order telemetry and our intelligent ETA engine, I can look up your preparation status, live ETA, rider updates, or recent food receipts.\n\nHow can I help you right now?",
+      text: "👋 Hi! I'm **BiteDash AI Copilot**.\n\nI can help you discover delicious meals, add food to your cart, apply verified promo coupons, explain live order ETAs, or reorder past favorites.\n\nWhat are you craving today?",
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      cards: [],
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentAction, setCurrentAction] = useState(null);
   const [isOpen, setIsOpen] = useState(!isFloating);
   const messagesEndRef = useRef(null);
 
@@ -29,7 +35,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     if (isOpen) {
       scrollToBottom();
     }
-  }, [messages, loading, isOpen]);
+  }, [messages, loading, currentAction, isOpen]);
 
   // Global event listener to open chat from navbar or hero CTA
   useEffect(() => {
@@ -39,12 +45,34 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
   }, []);
 
   const quickPrompts = [
+    "Find biryani under ₹300",
+    "What's in my cart?",
+    "Apply the best coupon",
     orderId ? `Where is order #${orderId.slice(-6).toUpperCase()}?` : "Where is my order?",
-    "What's my ETA?",
-    "What did I order?",
-    "Show me my latest order.",
-    "What is the cancellation policy?",
+    "Reorder my last meal",
   ];
+
+  const handleAddToCart = async (itemId, restaurantId, name) => {
+    try {
+      const { data } = await axios.post(
+        `${restaurantService}/api/cart/add`,
+        { restaurantId, itemId },
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+      toast.success(`Added ${name || "item"} to your cart! 🛒`);
+      await fetchCart();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to add item to cart");
+    }
+  };
+
+  const handleApplyCoupon = async (code) => {
+    sendMessage(`Apply coupon ${code}`);
+  };
 
   const sendMessage = async (messageText) => {
     const textToSend = messageText || input;
@@ -59,10 +87,12 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setLoading(true);
+    setCurrentAction("Processing your request...");
 
     try {
       const historyPayload = messages
         .filter((m) => m.role === "user" || m.role === "model")
+        .slice(-8)
         .map((m) => ({
           role: m.role,
           text: m.text,
@@ -70,7 +100,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
 
       const finalPrompt =
         orderId && !textToSend.includes(orderId)
-          ? `${textToSend} (Referencing Order ID: ${orderId})`
+          ? `${textToSend} (Context: User is viewing Order #${orderId.slice(-6).toUpperCase()})`
           : textToSend;
 
       const { data } = await axios.post(
@@ -86,51 +116,69 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
         }
       );
 
+      // If action steps returned, show the final one
+      if (Array.isArray(data.actions) && data.actions.length > 0) {
+        setCurrentAction(data.actions[data.actions.length - 1]);
+      }
+
       const botReply = {
         role: "model",
-        text: data.reply || data.message || "I found your order information.",
+        text: data.reply || data.message || "I've updated your request.",
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        cards: Array.isArray(data.cards) ? data.cards : [],
       };
 
       setMessages((prev) => [...prev, botReply]);
+
+      // If backend modified the cart, trigger global cart synchronization immediately
+      if (data.cartUpdated) {
+        await fetchCart();
+      }
     } catch (err) {
-      console.error("AI chat error:", err);
+      console.error("AI agent error:", err);
       const errorMessage =
         err.response?.data?.message ||
-        "I'm having trouble connecting to support right now. Please make sure you are logged in and try again.";
+        "I'm having trouble connecting right now. Please make sure you are logged in and try again.";
       setMessages((prev) => [
         ...prev,
         {
           role: "model",
           text: `⚠️ ${errorMessage}`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          cards: [],
         },
       ]);
     } finally {
       setLoading(false);
+      setCurrentAction(null);
     }
   };
 
-  // If floating and closed, render the floating trigger pill
+  const lastMessage = messages[messages.length - 1];
+  const isAwaitingConfirmation =
+    lastMessage?.role === "model" &&
+    lastMessage?.text?.includes("Would you like me to place the order?");
+
+  // If floating and closed, render the floating trigger button
   if (isFloating && !isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
         className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-indigo-700 text-white px-4 py-3 rounded-full shadow-2xl hover:scale-105 transition-all duration-200 border-2 border-white/20 cursor-pointer group"
-        aria-label="Open BiteDash AI Support Chat"
+        aria-label="Open BiteDash AI Assistant"
       >
         <div className="relative">
           <Bot className="w-5 h-5 text-white" />
           <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full ring-2 ring-white animate-pulse"></span>
         </div>
-        <span className="text-xs font-black tracking-wide">AI Order Support</span>
+        <span className="text-xs font-black tracking-wide">BiteDash Copilot</span>
       </button>
     );
   }
 
   const containerClasses = isFloating
-    ? "fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[420px] h-[580px] max-h-[85vh] rounded-3xl shadow-2xl border border-slate-200/80 bg-white flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
-    : "w-full h-[520px] rounded-3xl border border-slate-200/80 bg-white flex flex-col overflow-hidden shadow-sm";
+    ? "fixed bottom-6 right-6 z-50 w-[95vw] sm:w-[440px] h-[620px] max-h-[88vh] rounded-3xl shadow-2xl border border-slate-200/90 bg-white flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-200"
+    : "w-full h-[560px] rounded-3xl border border-slate-200/90 bg-white flex flex-col overflow-hidden shadow-sm";
 
   return (
     <div className={containerClasses}>
@@ -148,10 +196,10 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-sm text-white">BiteDash Copilot</h3>
               <span className="text-[10px] bg-indigo-500/20 text-indigo-300 font-bold px-2 py-0.5 rounded-full border border-indigo-400/30">
-                Live Tools
+                Agentic Tools
               </span>
             </div>
-            <p className="text-[11px] text-slate-400 font-medium">Real-time Order &amp; ETA Telemetry</p>
+            <p className="text-[11px] text-slate-400 font-medium">Conversational Discovery &amp; Real Cart Actions</p>
           </div>
         </div>
 
@@ -181,31 +229,98 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/40 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-slate-50/40 custom-scrollbar">
         {messages.map((msg, idx) => (
           <div
             key={idx}
             className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs ${
+              className={`max-w-[90%] rounded-2xl p-3.5 text-xs leading-relaxed shadow-2xs ${
                 msg.role === "user"
                   ? "bg-red-600 text-white rounded-br-none"
-                  : "bg-white text-slate-800 rounded-bl-none border border-slate-200/70"
+                  : "bg-white text-slate-800 rounded-bl-none border border-slate-200/80"
               }`}
             >
               <div className="whitespace-pre-wrap">{msg.text}</div>
+
+              {/* Render interactive cards attached to model messages */}
+              {Array.isArray(msg.cards) && msg.cards.length > 0 && (
+                <div className="mt-2.5 pt-2 border-t border-slate-100/80 space-y-1">
+                  {msg.cards.map((card, cardIdx) => {
+                    if (card.type === "food") {
+                      return (
+                        <FoodCard
+                          key={cardIdx}
+                          data={card.data}
+                          onAddToCart={handleAddToCart}
+                        />
+                      );
+                    }
+                    if (card.type === "restaurant") {
+                      return <RestaurantCard key={cardIdx} data={card.data} />;
+                    }
+                    if (card.type === "cart") {
+                      return (
+                        <CartCard
+                          key={cardIdx}
+                          data={card.data}
+                          onCheckout={() => sendMessage("Place my order")}
+                        />
+                      );
+                    }
+                    if (card.type === "order") {
+                      return <OrderCard key={cardIdx} data={card.data} />;
+                    }
+                    if (card.type === "coupon") {
+                      return (
+                        <CouponCard
+                          key={cardIdx}
+                          data={card.data}
+                          onApply={handleApplyCoupon}
+                        />
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              )}
             </div>
             <span className="text-[10px] text-slate-400 mt-1 px-1">{msg.time}</span>
           </div>
         ))}
 
+        {/* Live Action Status Pill */}
         {loading && (
-          <div className="flex items-center gap-2 text-xs text-indigo-700 font-semibold p-2.5 bg-indigo-50/70 rounded-2xl w-fit border border-indigo-100 animate-pulse">
+          <div className="flex items-center gap-2 text-xs text-indigo-700 font-semibold p-2.5 bg-indigo-50/80 rounded-2xl w-fit border border-indigo-100 shadow-2xs animate-pulse">
             <div className="h-3.5 w-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <span>Inspecting live kitchen orders &amp; rider telemetry...</span>
+            <span>{currentAction || "Consulting BiteDash live telemetry..."}</span>
           </div>
         )}
+
+        {/* Checkout Confirmation Prompt Buttons */}
+        {!loading && isAwaitingConfirmation && (
+          <div className="p-3 bg-red-50/90 rounded-2xl border border-red-200/80 space-y-2">
+            <p className="text-[11px] font-bold text-red-900">
+              Confirm your order placement:
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => sendMessage("Yes, place the order")}
+                className="flex-1 py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                Yes, Place Order 🎉
+              </button>
+              <button
+                onClick={() => sendMessage("Cancel order")}
+                className="py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition cursor-pointer"
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -222,7 +337,7 @@ const AISupportChat = ({ orderId, isFloating = false }) => {
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder='Ask: "Where is my food?", "What is my ETA?"...'
+            placeholder='Ask: "Find spicy biryani under 300", "Apply coupon"...'
             className="flex-1 bg-slate-50 border border-slate-200 focus:border-red-500 focus:bg-white text-xs rounded-xl px-3.5 py-2.5 outline-none transition placeholder:text-slate-400"
           />
           <button

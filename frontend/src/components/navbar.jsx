@@ -180,10 +180,11 @@ const Navbar = () => {
 
           <button
             onClick={handleOpenAiSupport}
-            className="hidden xl:flex px-2.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 hover:bg-indigo-50/80 transition items-center gap-1.5 cursor-pointer shrink-0"
+            className="hidden lg:flex px-2.5 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 border border-indigo-200/60 transition items-center gap-1.5 cursor-pointer shrink-0 shadow-2xs"
           >
             <Bot className="w-3.5 h-3.5 text-indigo-600" />
-            <span>AI Support</span>
+            <span>AI Copilot</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
           </button>
         </nav>
 
@@ -485,9 +486,13 @@ const Navbar = () => {
             </a>
             <button
               onClick={handleOpenAiSupport}
-              className="p-3 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-800 flex items-center gap-2 text-left transition cursor-pointer"
+              className="p-3 bg-indigo-50 hover:bg-indigo-100 rounded-xl text-indigo-800 flex items-center justify-between text-left transition cursor-pointer font-bold text-xs"
             >
-              🤖 AI Support
+              <div className="flex items-center gap-2">
+                <Bot className="w-4 h-4 text-indigo-600" />
+                <span>🤖 AI Food Copilot</span>
+              </div>
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
             </button>
             {isAuth && (
               <>

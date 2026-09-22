@@ -57,6 +57,7 @@ app.use("/api/surplus", surplusRoutes);
 app.use("/api/recommendation", recommendationRoutes);
 app.use("/api/batch", batchRoutes);
 app.use("/api/support", aiSupportRoutes);
+app.use("/api/agent", aiSupportRoutes);
 app.use("/api/demand", demandRoutes);
 
 app.listen(PORT, () => {

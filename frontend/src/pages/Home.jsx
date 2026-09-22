@@ -267,13 +267,13 @@ const Home = () => {
           >
             <div className="relative z-10">
               <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 px-2 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                <Bot className="w-3 h-3 text-indigo-200" /> 24/7 AI Order Copilot
+                <Bot className="w-3 h-3 text-indigo-200" /> Agentic AI Food Copilot
               </span>
-              <h3 className="text-xl font-black mt-1">Need Order Assistance?</h3>
-              <p className="text-xs text-indigo-100 font-medium">Ask Zen for live ETA, rider updates &amp; recommendations</p>
+              <h3 className="text-xl font-black mt-1">Order Food with AI</h3>
+              <p className="text-xs text-indigo-100 font-medium">Find dishes, manage your cart, apply best coupons &amp; track live ETA</p>
             </div>
             <span className="text-xs font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-              Chat with Assistant →
+              Order via AI Chat →
             </span>
           </div>
         </section>
